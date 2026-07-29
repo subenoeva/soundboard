@@ -40,6 +40,8 @@ class Voice:
         while written < total and not self.finished:
             take = min(total - written, self._end - self._position)
             chunk = self._pcm[self._position : self._position + take]
+            # One small array per active voice per block; adding a scratch buffer
+            # to avoid it would add real-time-path complexity for a negligible saving.
             out[written : written + take] += chunk * self.gain
             self._position += take
             written += take
