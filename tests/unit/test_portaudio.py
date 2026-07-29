@@ -1,3 +1,6 @@
+from typing import Any
+
+import numpy as np
 import pytest
 
 from soundboard.audio.backend import DeviceInfo
@@ -40,3 +43,50 @@ def test_lists_real_devices() -> None:
 
     assert devices
     assert all(isinstance(d.name, str) for d in devices)
+
+
+def test_open_input_converts_stereo_indata_to_mono_frames(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    class _FakeInputStream:
+        def __init__(self, **kwargs: Any) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr("soundboard.audio.portaudio.sd.InputStream", _FakeInputStream)
+
+    received: list[np.ndarray] = []
+    PortAudioBackend().open_input(
+        device=0,
+        samplerate=48_000,
+        blocksize=64,
+        callback=lambda block: received.append(block.copy()),
+    )
+
+    indata = np.full((64, 1), 0.5, dtype=np.float32)
+    captured["callback"](indata, 64, None, None)
+
+    assert len(received) == 1
+    assert received[0].shape == (64,)
+    assert np.allclose(received[0], 0.5)
+
+
+def test_open_output_passes_the_buffer_through_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    class _FakeOutputStream:
+        def __init__(self, **kwargs: Any) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr("soundboard.audio.portaudio.sd.OutputStream", _FakeOutputStream)
+
+    def fill(out: np.ndarray) -> None:
+        out[:] = 0.25
+
+    PortAudioBackend().open_output(
+        device=1, samplerate=48_000, blocksize=64, channels=2, callback=fill
+    )
+
+    outdata = np.zeros((64, 2), dtype=np.float32)
+    captured["callback"](outdata, 64, None, None)
+
+    assert np.allclose(outdata, 0.25)
