@@ -101,8 +101,9 @@ Cada componente tiene un propósito único, interfaz explícita y se puede proba
 | `audio.backend.AudioBackend` | Protocolo: abrir/cerrar streams, enumerar dispositivos | — |
 | `audio.backend.PortAudioBackend` | Implementación real sobre `sounddevice` | sounddevice |
 | `audio.backend.FakeBackend` | Implementación en memoria, reloj simulado, para tests | numpy |
-| `audio.ringbuffer.RingBuffer` | Cola SPSC de `float32`, sin bloqueo, sin reservas de memoria | numpy |
-| `audio.drift.DriftController` | Mide ocupación del buffer, devuelve ratio de resampleo | soxr |
+| `audio.ringbuffer.RingBuffer` | Cola SPSC de `float32`, sin reservas de memoria en el camino caliente | numpy |
+| `audio.drift.DriftController` | Mide ocupación del buffer, devuelve ratio de lectura | — |
+| `audio.drift.DriftResampler` | Lee del ring buffer a tasa fraccionaria con interpolación lineal | numpy |
 | `audio.voice.Voice` | Una reproducción en curso: posición, ganancia, bucle, *trim* | numpy |
 | `audio.voice.StreamingVoice` | Igual, pero leyendo de disco con hilo lector propio | numpy |
 | `audio.mixer.Mixer` | Suma voces + bus de micro, aplica *ducking* y limitador | Voice |
@@ -133,15 +134,22 @@ Algoritmo:
 1. El callback de salida registra la ocupación del ring buffer en cada bloque.
 2. Una media móvil exponencial (constante ~2 s) estima la ocupación real `fill`.
 3. `ratio = 1 + k · (fill − target) / target`, con `k` pequeño y `ratio` limitado a ±0,5 %.
-4. El bus de micro se remuestrea con `soxr` en modo tasa variable usando ese `ratio`.
+   `ratio` se define como frames de entrada consumidos por frame de salida producido.
+4. El bus de micro se lee del ring buffer con **posición fraccionaria e interpolación
+   lineal** (`DriftResampler`), avanzando `ratio` muestras por muestra de salida y
+   conservando la fase entre bloques.
 
 Objetivo de ocupación: 2 bloques. Capacidad: 16 bloques. Si el buffer se vacía se
 inserta silencio y se cuenta un *underrun*; si se llena se descartan las muestras más
 antiguas y se cuenta un *overrun*. Ambos contadores se exponen en la UI de diagnóstico.
 
-Alternativa de reserva si `soxr` en tasa variable resulta problemático: duplicar o
-eliminar una muestra en un cruce por cero cada vez que el error acumulado supera una
-muestra. Menos elegante, inaudible en voz, cero dependencias añadidas.
+**Por qué interpolación lineal y no `soxr` en tasa variable:** `python-soxr` no expone
+`soxr_set_io_ratio`, así que la tasa variable no es accesible desde Python. Y para
+desviaciones de ±0,5 % la interpolación lineal equivale a un retardo fraccionario de
+menos de una muestra: su distorsión queda muy por debajo del ruido de fondo de cualquier
+micrófono. `soxr` se sigue usando donde brilla — el remuestreo de tasa fija y alta
+calidad en la importación. Cero dependencias nuevas y un algoritmo que cabe en una
+prueba unitaria.
 
 ### 4.4 Seguridad en tiempo real
 
@@ -149,7 +157,12 @@ El callback de audio se ejecuta en un hilo de PortAudio y necesita adquirir el G
 obligatorias dentro del callback:
 
 - Solo operaciones vectorizadas de numpy sobre arrays preasignados. Nada de reservas.
-- Prohibido: E/S, `logging`, `queue.Queue`, locks, decodificación, creación de objetos.
+- Prohibido: E/S, `logging`, `queue.Queue`, decodificación, creación de objetos.
+- El único bloqueo permitido es el `threading.Lock` interno del `RingBuffer`, que protege
+  **solo la actualización de índices**, nunca la copia de datos. En CPython el GIL ya
+  serializa el bytecode, así que perseguir la ausencia total de bloqueos no aporta nada
+  real; una sección crítica de tres asignaciones es más honesta y más correcta que un
+  esquema sin bloqueos que se rompe al descartar muestras antiguas en desbordamiento.
 - Comunicación desde la UI mediante una `collections.deque` de comandos con objetos
   preasignados de un *pool*. El callback drena la deque con `popleft` hasta vaciarla.
 - Las métricas se escriben en un array numpy compartido, no en estructuras Python.
