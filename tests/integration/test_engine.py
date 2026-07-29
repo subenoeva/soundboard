@@ -139,6 +139,42 @@ def test_start_closes_the_input_stream_if_opening_the_output_stream_fails() -> N
     assert backend.streams == []
 
 
+def test_start_closes_both_streams_if_starting_the_output_stream_fails() -> None:
+    """Regression test for the sibling leak: ``open_output`` succeeds and
+    assigns ``self._output_stream``, but the output stream's own ``.start()``
+    raises. Before the fix, the ``except`` block only cleaned up the input
+    stream, leaving the opened-but-not-started output stream referenced and
+    never closed.
+    """
+
+    class _FailingStartStream(FakeStream):
+        def start(self) -> None:
+            raise RuntimeError("output device rejected start")
+
+    class _FailingOutputStartBackend(FakeBackend):
+        def open_output(
+            self,
+            *,
+            device: int | None,
+            samplerate: int,
+            blocksize: int,
+            channels: int,
+            callback: OutputCallback,
+        ) -> FakeStream:
+            stream = _FailingStartStream(self, False, blocksize, channels, callback)
+            self.streams.append(stream)
+            return stream
+
+    backend = _FailingOutputStartBackend()
+    engine = AudioEngine(backend, CONFIG)
+
+    with pytest.raises(RuntimeError, match="output device rejected start"):
+        engine.start()
+
+    # Both streams were opened; a leak means either is still in backend.streams.
+    assert backend.streams == []
+
+
 def test_drift_compensation_stays_stable_under_a_real_clock_mismatch() -> None:
     """Exercises RingBuffer + DriftController + DriftResampler + AudioEngine
     together under an actual rate mismatch between the two simulated clocks,

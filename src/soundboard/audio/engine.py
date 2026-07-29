@@ -98,7 +98,13 @@ class AudioEngine:
             )
             self._output_stream.start()
         except Exception:
-            # Do not leave the input stream running with nothing to close it.
+            # Do not leave a stream running with nothing to close it: open_output
+            # may have succeeded and left self._output_stream assigned even
+            # though the failure came from its own .start() call.
+            if self._output_stream is not None:
+                self._output_stream.stop()
+                self._output_stream.close()
+                self._output_stream = None
             self._input_stream.stop()
             self._input_stream.close()
             self._input_stream = None
