@@ -37,6 +37,31 @@ def test_find_device_reports_a_missing_needle() -> None:
         find_device(DEVICES, "nonexistent", want_input=True)
 
 
+def test_find_device_prefers_wasapi_when_the_same_device_ties_by_name() -> None:
+    """Windows exposes one physical device once per host API, all under the
+    same (or MME-truncated) name. A needle that matches several such
+    duplicates should resolve to the WASAPI entry rather than error out."""
+    duplicated = [
+        DeviceInfo(0, "Headset Mic", "MME", 2, 0, 44_100.0),
+        DeviceInfo(1, "Headset Mic", "Windows DirectSound", 2, 0, 44_100.0),
+        DeviceInfo(2, "Headset Mic", "Windows WASAPI", 2, 0, 48_000.0),
+    ]
+
+    found = find_device(duplicated, "headset", want_input=True)
+
+    assert found.index == 2
+
+
+def test_find_device_still_rejects_ambiguity_within_the_preferred_host_api() -> None:
+    tied = [
+        DeviceInfo(0, "Headset Mic A", "Windows WASAPI", 2, 0, 48_000.0),
+        DeviceInfo(1, "Headset Mic B", "Windows WASAPI", 2, 0, 48_000.0),
+    ]
+
+    with pytest.raises(LookupError, match="ambiguous"):
+        find_device(tied, "headset", want_input=True)
+
+
 @pytest.mark.hardware
 def test_lists_real_devices() -> None:
     devices = PortAudioBackend().list_devices()

@@ -9,6 +9,18 @@ import sounddevice as sd
 
 from soundboard.audio.backend import DeviceInfo, InputCallback, OutputCallback, Stream
 
+# Windows exposes the same physical device once per host API, all under the same
+# (or MME-truncated) name. Prefer the lowest-latency/most-capable API on a name tie
+# instead of treating the duplicate as ambiguous.
+_HOSTAPI_PRIORITY = ("Windows WASAPI", "Windows DirectSound", "MME", "Windows WDM-KS")
+
+
+def _hostapi_rank(hostapi: str) -> int:
+    try:
+        return _HOSTAPI_PRIORITY.index(hostapi)
+    except ValueError:
+        return len(_HOSTAPI_PRIORITY)
+
 
 def find_device(devices: list[DeviceInfo], needle: str, *, want_input: bool) -> DeviceInfo:
     """Resolve a device by case-insensitive substring of its name.
@@ -26,6 +38,9 @@ def find_device(devices: list[DeviceInfo], needle: str, *, want_input: bool) -> 
     if not matches:
         direction = "input" if want_input else "output"
         raise LookupError(f"no device matching {needle!r} with an {direction} channel")
+    if len(matches) > 1:
+        best_rank = min(_hostapi_rank(device.hostapi) for device in matches)
+        matches = [device for device in matches if _hostapi_rank(device.hostapi) == best_rank]
     if len(matches) > 1:
         names = ", ".join(repr(device.name) for device in matches)
         raise LookupError(f"ambiguous device name {needle!r}; matches: {names}")
