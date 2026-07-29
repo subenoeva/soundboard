@@ -87,15 +87,22 @@ class AudioEngine:
             blocksize=self._config.blocksize,
             callback=self._on_input,
         )
-        self._output_stream = self._backend.open_output(
-            device=self._config.output_device,
-            samplerate=self._config.samplerate,
-            blocksize=self._config.blocksize,
-            channels=self._config.output_channels,
-            callback=self._on_output,
-        )
         self._input_stream.start()
-        self._output_stream.start()
+        try:
+            self._output_stream = self._backend.open_output(
+                device=self._config.output_device,
+                samplerate=self._config.samplerate,
+                blocksize=self._config.blocksize,
+                channels=self._config.output_channels,
+                callback=self._on_output,
+            )
+            self._output_stream.start()
+        except Exception:
+            # Do not leave the input stream running with nothing to close it.
+            self._input_stream.stop()
+            self._input_stream.close()
+            self._input_stream = None
+            raise
 
     def stop(self) -> None:
         for stream in (self._output_stream, self._input_stream):
