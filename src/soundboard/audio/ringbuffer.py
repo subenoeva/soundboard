@@ -10,10 +10,16 @@ import numpy as np
 class RingBuffer:
     """Fixed-capacity FIFO of mono ``float32`` frames.
 
-    One thread writes and one thread reads. Only the index updates run inside the
-    lock; the sample copies happen outside it, so a slow ``memcpy`` never blocks
-    the other side. A single slot is kept free so that a full buffer is
-    distinguishable from an empty one.
+    One thread writes and one thread reads. The lock covers the entire body of
+    ``write`` and ``read``, including the sample copy: splitting the copy out of
+    the critical section leaves a window where an overflow in ``write`` can
+    advance the read index while ``read`` is mid-copy with a stale copy of that
+    same index, and ``read``'s own index update then clobbers it — frames vanish
+    uncounted, or the read pointer ends up pointing at data that is about to be
+    overwritten. The copy itself is a few KB ``memcpy``, sub-microsecond at the
+    block sizes this engine uses, so holding the lock across it costs nothing
+    real. A single slot is kept free so that a full buffer is distinguishable
+    from an empty one.
     """
 
     def __init__(self, capacity: int) -> None:
@@ -57,15 +63,14 @@ class RingBuffer:
                 self.overruns += 1
             start = self._write
 
-        end = start + n
-        if end <= self._size:
-            self._buf[start:end] = data
-        else:
-            split = self._size - start
-            self._buf[start:] = data[:split]
-            self._buf[: end - self._size] = data[split:]
+            end = start + n
+            if end <= self._size:
+                self._buf[start:end] = data
+            else:
+                split = self._size - start
+                self._buf[start:] = data[:split]
+                self._buf[: end - self._size] = data[split:]
 
-        with self._lock:
             self._write = end % self._size
 
     def read(self, out: np.ndarray) -> int:
@@ -79,19 +84,18 @@ class RingBuffer:
             available = int((self._write - self._read) % self._size)
             start = self._read
 
-        take = min(n, available)
-        end = start + take
-        if end <= self._size:
-            out[:take] = self._buf[start:end]
-        else:
-            split = self._size - start
-            out[:split] = self._buf[start:]
-            out[split:take] = self._buf[: end - self._size]
+            take = min(n, available)
+            end = start + take
+            if end <= self._size:
+                out[:take] = self._buf[start:end]
+            else:
+                split = self._size - start
+                out[:split] = self._buf[start:]
+                out[split:take] = self._buf[: end - self._size]
 
-        if take < n:
-            out[take:] = 0.0
-            self.underruns += 1
+            if take < n:
+                out[take:] = 0.0
+                self.underruns += 1
 
-        with self._lock:
             self._read = end % self._size
         return take

@@ -158,11 +158,16 @@ obligatorias dentro del callback:
 
 - Solo operaciones vectorizadas de numpy sobre arrays preasignados. Nada de reservas.
 - Prohibido: E/S, `logging`, `queue.Queue`, decodificación, creación de objetos.
-- El único bloqueo permitido es el `threading.Lock` interno del `RingBuffer`, que protege
-  **solo la actualización de índices**, nunca la copia de datos. En CPython el GIL ya
-  serializa el bytecode, así que perseguir la ausencia total de bloqueos no aporta nada
-  real; una sección crítica de tres asignaciones es más honesta y más correcta que un
-  esquema sin bloqueos que se rompe al descartar muestras antiguas en desbordamiento.
+- El único bloqueo permitido es el `threading.Lock` interno del `RingBuffer`, que cubre
+  el cuerpo completo de `write` y `read`, incluida la copia de muestras. Una versión
+  anterior de este diseño partía la sección crítica para dejar la copia fuera del lock,
+  razonando que el GIL de CPython ya bastaba para serializar el resto. Era incorrecto:
+  si el productor detecta un desbordamiento y avanza el índice de lectura mientras el
+  consumidor tiene su propia copia de ese índice en curso fuera del lock, la escritura
+  final del consumidor pisa la actualización del productor — se pierden muestras sin
+  contarlas, o el puntero de lectura queda apuntando a datos ya sobrescritos. La copia
+  es un `memcpy` de pocos kilobytes, submicrosegundo para los tamaños de bloque en juego;
+  cubrirla con el lock no cuesta rendimiento real.
 - Comunicación desde la UI mediante una `collections.deque` de comandos con objetos
   preasignados de un *pool*. El callback drena la deque con `popleft` hasta vaciarla.
 - Las métricas se escriben en un array numpy compartido, no en estructuras Python.
