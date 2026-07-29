@@ -5,6 +5,10 @@ from __future__ import annotations
 import argparse
 import sys
 
+import sounddevice as sd
+import soundfile as sf
+
+from soundboard.audio.backend import AudioBackend
 from soundboard.audio.engine import AudioEngine, EngineConfig
 from soundboard.audio.portaudio import PortAudioBackend, find_device
 from soundboard.audioio import load_mono_48k
@@ -39,31 +43,41 @@ def _print_devices(backend: PortAudioBackend) -> int:
             direction.append("in")
         if device.max_output_channels:
             direction.append("out")
-        print(f"{device.index:3d}  {'/'.join(direction):7s}  [{device.hostapi}]  {device.name}")
+        print(
+            f"{device.index:3d}  {'/'.join(direction):7s}  [{device.hostapi}]  "
+            f"{device.default_samplerate:.0f}Hz  {device.name}"
+        )
     return 0
 
 
-def _run(args: argparse.Namespace) -> int:
-    backend = PortAudioBackend()
-    devices = backend.list_devices()
-    microphone = find_device(devices, args.mic, want_input=True)
-    cable = find_device(devices, args.out, want_input=False)
+def _run(args: argparse.Namespace, backend: AudioBackend | None = None) -> int:
+    if backend is None:
+        backend = PortAudioBackend()
 
-    clips = {}
-    for assignment in args.sound:
-        key, path = parse_sound_argument(assignment)
-        clips[key] = load_mono_48k(path)
+    try:
+        devices = backend.list_devices()
+        microphone = find_device(devices, args.mic, want_input=True)
+        cable = find_device(devices, args.out, want_input=False)
 
-    engine = AudioEngine(
-        backend,
-        EngineConfig(
-            blocksize=args.blocksize,
-            input_device=microphone.index,
-            output_device=cable.index,
-            output_channels=min(2, cable.max_output_channels) or 1,
-        ),
-    )
-    engine.start()
+        clips = {}
+        for assignment in args.sound:
+            key, path = parse_sound_argument(assignment)
+            clips[key] = load_mono_48k(path)
+
+        engine = AudioEngine(
+            backend,
+            EngineConfig(
+                blocksize=args.blocksize,
+                input_device=microphone.index,
+                output_device=cable.index,
+                output_channels=min(2, cable.max_output_channels) or 1,
+            ),
+        )
+        engine.start()
+    except (LookupError, OSError, sd.PortAudioError, sf.LibsndfileError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
     print(f"microphone: {microphone.name}")
     print(f"output:     {cable.name}")
     print(f"keys:       {', '.join(sorted(clips)) or '(none)'}")
@@ -80,7 +94,7 @@ def _run(args: argparse.Namespace) -> int:
                 engine.play(clips[command])
             elif command:
                 metrics = engine.metrics
-                print(f"unknown key {command!r} | {metrics}")
+                print(f"unknown key {command!r} | {metrics} | xruns={backend.xruns}")
     finally:
         engine.stop()
     return 0

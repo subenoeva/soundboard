@@ -37,6 +37,13 @@ class Stream(Protocol):
 
 
 class AudioBackend(Protocol):
+    xruns: int
+    """Driver-reported overflow/underflow count, at the device boundary.
+
+    Distinct from ``RingBuffer.overruns``/``underruns``, which only see the
+    engine's internal buffer state, not what the driver itself reports.
+    """
+
     def list_devices(self) -> list[DeviceInfo]: ...
 
     def open_input(

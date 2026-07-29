@@ -49,6 +49,12 @@ class _SoundDeviceStream:
 class PortAudioBackend:
     """Real audio I/O. Mono in, N channels out, always float32."""
 
+    def __init__(self) -> None:
+        # Driver-reported xrun count (input_overflow, output_underflow, etc.),
+        # accumulated from PortAudio's own ``status`` callback flag. Distinct
+        # from RingBuffer's overrun/underrun counters, which never see this.
+        self.xruns = 0
+
     def list_devices(self) -> list[DeviceInfo]:
         hostapis = sd.query_hostapis()
         return [
@@ -72,6 +78,8 @@ class PortAudioBackend:
         callback: InputCallback,
     ) -> Stream:
         def on_data(indata: np.ndarray, frames: int, time: Any, status: Any) -> None:
+            if status:
+                self.xruns += 1
             callback(indata[:, 0])
 
         return _SoundDeviceStream(
@@ -96,6 +104,8 @@ class PortAudioBackend:
         callback: OutputCallback,
     ) -> Stream:
         def on_data(outdata: np.ndarray, frames: int, time: Any, status: Any) -> None:
+            if status:
+                self.xruns += 1
             callback(outdata)
 
         return _SoundDeviceStream(

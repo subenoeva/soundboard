@@ -51,6 +51,9 @@ class FakeBackend:
         self.streams: list[FakeStream] = []
         self.input_source: Callable[[int], np.ndarray] | None = None
         self.captured: list[np.ndarray] = []
+        # Never incremented: FakeBackend has no driver boundary to report xruns
+        # from. Present only so it satisfies the AudioBackend protocol.
+        self.xruns = 0
 
     def list_devices(self) -> list[DeviceInfo]:
         return list(self._devices)

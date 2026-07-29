@@ -90,3 +90,45 @@ def test_open_output_passes_the_buffer_through_unchanged(monkeypatch: pytest.Mon
     captured["callback"](outdata, 64, None, None)
 
     assert np.allclose(outdata, 0.25)
+
+
+def test_input_status_flag_counts_as_an_xrun(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    class _FakeInputStream:
+        def __init__(self, **kwargs: Any) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr("soundboard.audio.portaudio.sd.InputStream", _FakeInputStream)
+
+    backend = PortAudioBackend()
+    backend.open_input(device=0, samplerate=48_000, blocksize=64, callback=lambda block: None)
+
+    indata = np.zeros((64, 1), dtype=np.float32)
+    captured["callback"](indata, 64, None, None)
+    assert backend.xruns == 0
+
+    captured["callback"](indata, 64, None, "input_overflow")
+    assert backend.xruns == 1
+
+
+def test_output_status_flag_counts_as_an_xrun(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    class _FakeOutputStream:
+        def __init__(self, **kwargs: Any) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr("soundboard.audio.portaudio.sd.OutputStream", _FakeOutputStream)
+
+    backend = PortAudioBackend()
+    backend.open_output(
+        device=1, samplerate=48_000, blocksize=64, channels=2, callback=lambda out: None
+    )
+
+    outdata = np.zeros((64, 2), dtype=np.float32)
+    captured["callback"](outdata, 64, None, None)
+    assert backend.xruns == 0
+
+    captured["callback"](outdata, 64, None, "output_underflow")
+    assert backend.xruns == 1
