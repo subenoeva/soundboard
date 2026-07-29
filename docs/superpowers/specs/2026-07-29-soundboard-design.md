@@ -191,6 +191,11 @@ Evita saturación cuando se disparan varios sonidos a la vez sin necesitar *look
 
 ## 5. Biblioteca y datos
 
+> **Supersedida:** esta sección describía persistencia local en SQLite de un único
+> perfil. La biblioteca de sonidos pasó a ser multiusuario sobre Supabase — ver
+> [`2026-07-29-supabase-sounds-design.md`](2026-07-29-supabase-sounds-design.md). El
+> resto de este documento (motor de audio, enrutado, atajos, UI) sigue vigente.
+
 ### 5.1 Almacenamiento
 
 Rutas vía `platformdirs`:

@@ -161,8 +161,9 @@ El diseño completo y el plan de implementación viven en
 
 Fases futuras, no implementadas todavía:
 
-- **Biblioteca de sonidos**: persistencia SQLite, importación con caché en
-  disco, CRUD completo.
+- **Biblioteca de sonidos**: multiusuario sobre Supabase (Postgres + Storage + Auth),
+  caché local de reproducción, CRUD con RLS por dueño — ver
+  [`docs/superpowers/specs/2026-07-29-supabase-sounds-design.md`](docs/superpowers/specs/2026-07-29-supabase-sounds-design.md).
 - **Interfaz gráfica**: ventana PySide6, rejilla de clips, arrastrar y
   soltar, bandeja del sistema, atajos globales.
 - **Enrutado automático**: detección/creación del dispositivo virtual sin
