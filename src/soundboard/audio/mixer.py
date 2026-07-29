@@ -60,6 +60,8 @@ class Mixer:
             # clip actually ends, not on every block.
             self._voices = [voice for voice in self._voices if not voice.finished]
 
+        # One small array per block for loudness detection; a scratch buffer would add
+        # real-time-path complexity for negligible savings.
         loud = self.ducking_enabled and bool(np.max(np.abs(sounds)) > self._threshold)
         target = self._duck_floor if loud else 1.0
         coefficient = self._attack if target < self._duck_gain else self._release
