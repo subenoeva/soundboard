@@ -14,7 +14,7 @@ entry_point = os.path.join(SPECPATH, "..", "..", "src", "soundboard", "__main__.
 
 a = Analysis(
     [entry_point],
-    pathex=[],
+    pathex=[os.path.join(SPECPATH, "..", "..", "src")],
     binaries=[],
     datas=[],
     hiddenimports=collect_submodules("keyring.backends"),
