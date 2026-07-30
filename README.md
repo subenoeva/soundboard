@@ -265,7 +265,7 @@ Fases futuras, no implementadas todavía:
   locales y de la biblioteca Supabase, arrastrar y soltar, bandeja del sistema, atajos
   globales configurables por celda. Ver
   [`docs/superpowers/specs/2026-07-30-gui-design.md`](docs/superpowers/specs/2026-07-30-gui-design.md).
-- **Ejecutables standalone**: ✅ diseñado e implementado — releases automáticas vía
+- **Ejecutables standalone**: ✅ diseñados e implementados — releases automáticas vía
   `release-please` + PyInstaller, ver
   [`docs/superpowers/specs/2026-07-30-standalone-executables-design.md`](docs/superpowers/specs/2026-07-30-standalone-executables-design.md).
 - **Enrutado automático**: detección/creación del dispositivo virtual sin
