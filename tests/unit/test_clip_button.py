@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
@@ -65,16 +66,18 @@ def test_clear_returns_to_empty(qtbot: Any) -> None:
     assert "vac" in button.text().lower()
 
 
-def test_dropping_a_file_on_an_empty_cell_emits_file_dropped(qtbot: Any) -> None:
+def test_dropping_a_file_on_an_empty_cell_emits_file_dropped(qtbot: Any, tmp_path: Path) -> None:
     button = ClipButton(index=3)
     qtbot.addWidget(button)
     received = []
     button.file_dropped.connect(lambda index, path: received.append((index, path)))
 
-    event, _mime = _drop_event("C:/clips/laugh.wav")
+    dropped_path = tmp_path / "laugh.wav"
+    event, _mime = _drop_event(str(dropped_path))
     button.dropEvent(event)
 
-    assert received == [(3, "C:/clips/laugh.wav")]
+    # QUrl.toLocalFile() always returns forward-slash paths, even on Windows.
+    assert received == [(3, dropped_path.as_posix())]
 
 
 def test_dropping_a_file_on_an_occupied_cell_is_ignored(qtbot: Any) -> None:
