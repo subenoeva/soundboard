@@ -13,6 +13,9 @@ create policy "users insert their own profile"
 create policy "users update their own profile"
   on public.profiles for update to authenticated using (id = auth.uid());
 
+-- RLS policies only take effect once the role also holds the base table grant.
+grant select, insert, update on public.profiles to authenticated;
+
 -- categories: global shared taxonomy, editable only by whoever created each one.
 create table public.categories (
   id uuid primary key default gen_random_uuid(),
@@ -32,6 +35,8 @@ create policy "creators update their categories"
   on public.categories for update to authenticated using (created_by = auth.uid());
 create policy "creators delete their categories"
   on public.categories for delete to authenticated using (created_by = auth.uid());
+
+grant select, insert, update, delete on public.categories to authenticated;
 
 -- sounds: shared global library, editable only by the owner.
 create table public.sounds (
@@ -65,6 +70,8 @@ create policy "owners update their sounds"
 create policy "owners delete their sounds"
   on public.sounds for delete to authenticated using (owner_id = auth.uid());
 
+grant select, insert, update, delete on public.sounds to authenticated;
+
 -- storage: content-addressed PCM blobs, immutable once written.
 insert into storage.buckets (id, name, public)
   values ('sounds', 'sounds', false)
@@ -75,4 +82,11 @@ create policy "authenticated read sound blobs"
   using (bucket_id = 'sounds');
 create policy "authenticated upload sound blobs"
   on storage.objects for insert to authenticated
+  with check (bucket_id = 'sounds');
+-- storage_upload() always upserts: the path is the content hash, so re-uploading
+-- identical content under a different session (a second owner with the same clip)
+-- must succeed as a no-op update, not be rejected for not being the original uploader.
+create policy "authenticated upsert sound blobs"
+  on storage.objects for update to authenticated
+  using (bucket_id = 'sounds')
   with check (bucket_id = 'sounds');
