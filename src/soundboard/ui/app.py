@@ -76,7 +76,16 @@ def run_gui(
 ) -> int:
     app = QApplication.instance() or QApplication(argv if argv is not None else sys.argv)
 
-    client = client if client is not None else build_client()
+    if client is None:
+        try:
+            client = build_client()
+        except Exception as exc:
+            # Double-clicked by a non-technical user: a corrupt settings.json or an exe
+            # built without baked-in defaults would otherwise be a raw traceback dialog
+            # on Windows and complete silence under a Linux file manager.
+            QMessageBox.critical(None, "Configuración inválida", str(exc))
+            return 1
+
     store = store if store is not None else SessionStore()
     backend = backend if backend is not None else PortAudioBackend()
     hotkeys = hotkeys if hotkeys is not None else PynputHotkeyManager()

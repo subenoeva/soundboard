@@ -44,6 +44,33 @@ def test_run_gui_aborts_when_login_is_cancelled(
     assert exit_code == 1
 
 
+def test_run_gui_reports_an_unbuildable_client_instead_of_crashing(
+    qtbot: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    shown: list[str] = []
+
+    def _raise() -> object:
+        raise RuntimeError("SUPABASE_URL no configurada")
+
+    monkeypatch.setattr(app_module, "build_client", _raise)
+    monkeypatch.setattr(
+        QMessageBox, "critical", lambda parent, title, text, *args, **kwargs: shown.append(text)
+    )
+
+    exit_code = run_gui(
+        client=None,
+        store=SessionStore(backend=_DictKeyringBackend()),
+        backend=FakeBackend(),
+        hotkeys=FakeHotkeyManager(),
+        exec_app=False,
+    )
+
+    assert exit_code == 1
+    assert shown == ["SUPABASE_URL no configurada"]
+
+
 def test_run_gui_happy_path_with_existing_session_and_layout(
     qtbot: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
