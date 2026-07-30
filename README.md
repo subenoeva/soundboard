@@ -4,10 +4,10 @@ Soundboard multiplataforma que inyecta clips de audio y tu micrófono real,
 mezclados, en un dispositivo de entrada virtual — para que Discord (u otra
 app de voz) reciba ambos como si vinieran de un único micrófono.
 
-> **Estado:** fase 1 (motor de audio + CLI de verificación). La interfaz
-> gráfica, la biblioteca de sonidos con persistencia, el enrutado automático
-> del dispositivo virtual y la cadena de efectos son fases futuras — ver
-> [Roadmap](#roadmap).
+> **Estado:** motor de audio + CLI de verificación, y biblioteca de sonidos
+> multiusuario sobre Supabase, implementados. La interfaz gráfica, el
+> enrutado automático del dispositivo virtual y la cadena de efectos son
+> fases futuras — ver [Roadmap](#roadmap).
 
 ## Por qué existe
 
