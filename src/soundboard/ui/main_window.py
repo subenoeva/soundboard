@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
 import numpy as np
 from PySide6.QtCore import QThreadPool, QTimer
@@ -31,7 +31,15 @@ from soundboard.ui.layout_store import Cell, GridLayout, LocalSource, RemoteSour
 
 
 class Engine(Protocol):
-    def play(self, pcm: np.ndarray, **kwargs: Any) -> None: ...
+    def play(
+        self,
+        pcm: np.ndarray,
+        *,
+        gain: float = 1.0,
+        loop: bool = False,
+        start: int = 0,
+        end: int | None = None,
+    ) -> None: ...
     def stop_all(self) -> None: ...
 
 
