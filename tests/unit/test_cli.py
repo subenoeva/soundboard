@@ -6,6 +6,10 @@ import soundfile as sf
 
 from soundboard.audio.fake_backend import FakeBackend
 from soundboard.cli import _run, build_parser, parse_sound_argument
+from soundboard.library.cache import SoundCache
+from soundboard.remote import categories, sounds
+from soundboard.remote.client import SessionStore
+from soundboard.remote.fake_client import FakeRemoteClient
 
 
 def test_parses_a_sound_assignment() -> None:
@@ -128,3 +132,166 @@ def test_run_reports_a_bad_clip_path_cleanly(
     assert backend.streams == []
     err = capsys.readouterr().err
     assert err.startswith("error:")
+
+
+class _DictKeyringBackend:
+    def __init__(self) -> None:
+        self._store: dict[tuple[str, str], str] = {}
+
+    def get_password(self, service: str, username: str) -> str | None:
+        return self._store.get((service, username))
+
+    def set_password(self, service: str, username: str, password: str) -> None:
+        self._store[(service, username)] = password
+
+    def delete_password(self, service: str, username: str) -> None:
+        del self._store[(service, username)]
+
+
+def test_auth_signup_and_login_subcommands(capsys: pytest.CaptureFixture[str]) -> None:
+    from soundboard.cli import _auth, build_parser
+
+    client = FakeRemoteClient()
+    store = SessionStore(backend=_DictKeyringBackend())
+
+    signup_args = build_parser().parse_args(["auth", "signup", "--email", "a@x.com"])
+    exit_code = _auth(signup_args, client=client, store=store, password_prompt=lambda: "hunter2")
+    assert exit_code == 0
+
+    login_args = build_parser().parse_args(["auth", "login", "--email", "a@x.com"])
+    exit_code = _auth(
+        login_args,
+        client=client,
+        store=store,
+        password_prompt=lambda: "hunter2",
+        display_name_prompt=lambda: "Pablo",
+    )
+    assert exit_code == 0
+    assert store.load() is not None
+
+    whoami_args = build_parser().parse_args(["auth", "whoami"])
+    exit_code = _auth(whoami_args, client=client, store=store)
+    assert exit_code == 0
+    assert "a@x.com" in capsys.readouterr().out
+
+
+def test_auth_whoami_without_a_session_reports_cleanly(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from soundboard.cli import _auth, build_parser
+
+    args = build_parser().parse_args(["auth", "whoami"])
+    exit_code = _auth(
+        args, client=FakeRemoteClient(), store=SessionStore(backend=_DictKeyringBackend())
+    )
+
+    assert exit_code == 1
+    assert "auth login" in capsys.readouterr().err
+
+
+def test_sounds_add_list_edit_rm_subcommands(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from soundboard.cli import _sounds, build_parser
+
+    client = FakeRemoteClient()
+    session = client.sign_in_as_new_user("owner@x.com")
+    store = SessionStore(backend=_DictKeyringBackend())
+    store.save(session)
+    clip = tmp_path / "clip.wav"
+    sf.write(str(clip), np.full(480, 0.3, dtype=np.float32), 48_000)
+
+    add_args = build_parser().parse_args(["sounds", "add", str(clip), "--name", "laugh"])
+    assert _sounds(add_args, client=client, store=store) == 0
+
+    added = sounds.list_sounds(client)[0]
+
+    list_args = build_parser().parse_args(["sounds", "list"])
+    assert _sounds(list_args, client=client, store=store) == 0
+    assert "laugh" in capsys.readouterr().out
+
+    edit_args = build_parser().parse_args(
+        ["sounds", "edit", added.id, "--name", "renamed"]
+    )
+    assert _sounds(edit_args, client=client, store=store) == 0
+    assert sounds.get_sound(client, added.id).name == "renamed"
+
+    rm_args = build_parser().parse_args(["sounds", "rm", added.id])
+    assert _sounds(rm_args, client=client, store=store) == 0
+    assert sounds.list_sounds(client) == []
+
+
+def test_sounds_edit_by_a_stranger_reports_cleanly(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from soundboard.cli import _sounds, build_parser
+
+    client = FakeRemoteClient()
+    owner = client.sign_in_as_new_user("owner@x.com")
+    clip = tmp_path / "clip.wav"
+    sf.write(str(clip), np.zeros(480, dtype=np.float32), 48_000)
+    added = sounds.add_sound(client, owner, str(clip), name="laugh")
+
+    stranger = client.sign_in_as_new_user("stranger@x.com")
+    store = SessionStore(backend=_DictKeyringBackend())
+    store.save(stranger)
+
+    edit_args = build_parser().parse_args(["sounds", "edit", added.id, "--name", "hijacked"])
+    exit_code = _sounds(edit_args, client=client, store=store)
+
+    assert exit_code == 1
+    assert "not" in capsys.readouterr().err.lower()
+
+
+def test_categories_add_list_rm_subcommands(capsys: pytest.CaptureFixture[str]) -> None:
+    from soundboard.cli import _categories, build_parser
+
+    client = FakeRemoteClient()
+    session = client.sign_in_as_new_user("owner@x.com")
+    store = SessionStore(backend=_DictKeyringBackend())
+    store.save(session)
+
+    add_args = build_parser().parse_args(["categories", "add", "memes"])
+    assert _categories(add_args, client=client, store=store) == 0
+
+    list_args = build_parser().parse_args(["categories", "list"])
+    assert _categories(list_args, client=client, store=store) == 0
+    assert "memes" in capsys.readouterr().out
+
+    rm_args = build_parser().parse_args(["categories", "rm", "memes"])
+    assert _categories(rm_args, client=client, store=store) == 0
+    assert categories.list_categories(client) == []
+
+
+def test_run_sound_resolves_a_remote_id_when_no_local_file_matches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from soundboard.cli import _run, build_parser
+
+    client = FakeRemoteClient()
+    session = client.sign_in_as_new_user("owner@x.com")
+    clip = tmp_path / "clip.wav"
+    sf.write(str(clip), np.full(64 * 50, 0.5, dtype=np.float32), 48_000)
+    added = sounds.add_sound(client, session, str(clip), name="laugh")
+
+    backend = FakeBackend()
+    backend.input_source = lambda frames: np.zeros(frames, dtype=np.float32)
+    args = build_parser().parse_args(
+        [
+            "run",
+            "--mic",
+            "microphone",
+            "--out",
+            "cable",
+            "--sound",
+            f"a={added.id}",
+            "--blocksize",
+            "64",
+        ]
+    )
+    monkeypatch.setattr("sys.stdin", _AdvancingStdin(["a", "stop", "quit"], backend, 5))
+
+    exit_code = _run(args, backend, remote_client=client, cache=SoundCache(tmp_path / "cache"))
+
+    assert exit_code == 0
+    assert np.max(backend.captured[9]) > 0.4
