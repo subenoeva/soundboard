@@ -1,21 +1,26 @@
 from typing import Any
 
 from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QDropEvent
 
 from soundboard.ui.clip_button import ClipButton, ClipState
 
 
-def _drop_event(path: str) -> QDropEvent:
+def _drop_event(path: str) -> tuple[QDropEvent, QMimeData]:
+    """Create a drop event with its associated QMimeData.
+
+    Returns both objects to keep mimeData alive (PySide6 stores raw pointer).
+    """
     mime = QMimeData()
     mime.setUrls([QUrl.fromLocalFile(path)])
-    return QDropEvent(
+    event = QDropEvent(
         QPointF(1, 1),
         Qt.DropAction.CopyAction,
         mime,
         Qt.MouseButton.LeftButton,
         Qt.KeyboardModifier.NoModifier,
     )
+    return event, mime
 
 
 def test_clip_button_starts_empty(qtbot: Any) -> None:
@@ -66,7 +71,8 @@ def test_dropping_a_file_on_an_empty_cell_emits_file_dropped(qtbot: Any) -> None
     received = []
     button.file_dropped.connect(lambda index, path: received.append((index, path)))
 
-    button.dropEvent(_drop_event("C:/clips/laugh.wav"))
+    event, _mime = _drop_event("C:/clips/laugh.wav")
+    button.dropEvent(event)
 
     assert received == [(3, "C:/clips/laugh.wav")]
 
@@ -78,7 +84,7 @@ def test_dropping_a_file_on_an_occupied_cell_is_ignored(qtbot: Any) -> None:
     received = []
     button.file_dropped.connect(lambda index, path: received.append((index, path)))
 
-    event = _drop_event("C:/clips/laugh.wav")
+    event, _mime = _drop_event("C:/clips/laugh.wav")
     button.dragEnterEvent(event)  # type: ignore
 
     assert not event.isAccepted()
