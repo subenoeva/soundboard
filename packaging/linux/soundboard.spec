@@ -20,7 +20,7 @@ a = Analysis(
     hiddenimports=collect_submodules("keyring.backends"),
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=[os.path.join(SPECPATH, "rt_hook_portaudio.py")],
     excludes=[],
     noarchive=False,
 )
