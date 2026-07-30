@@ -1,0 +1,70 @@
+name: release-build
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --group packaging
+      - name: Bake Supabase config
+        shell: python
+        env:
+          SOUNDBOARD_SUPABASE_URL: ${{ secrets.SOUNDBOARD_SUPABASE_URL }}
+          SOUNDBOARD_SUPABASE_ANON_KEY: ${{ secrets.SOUNDBOARD_SUPABASE_ANON_KEY }}
+        run: |
+          import os
+          from pathlib import Path
+
+          url = os.environ["SOUNDBOARD_SUPABASE_URL"]
+          key = os.environ["SOUNDBOARD_SUPABASE_ANON_KEY"]
+          Path("src/soundboard/_baked_defaults.py").write_text(
+              f"SUPABASE_URL = {url!r}\nSUPABASE_ANON_KEY = {key!r}\n"
+          )
+      - run: uv run pyinstaller packaging/windows/soundboard.spec
+      - name: Rename artifact to the release asset name
+        shell: bash
+        run: mv dist/soundboard.exe "soundboard-${{ github.event.release.tag_name }}-windows.exe"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: soundboard-${{ github.event.release.tag_name }}-windows.exe
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PortAudio and Qt runtime libraries
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2 libegl1 libxkbcommon0 libxcb-cursor0 libgl1 libdbus-1-3
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --group packaging
+      - name: Bake Supabase config
+        shell: python
+        env:
+          SOUNDBOARD_SUPABASE_URL: ${{ secrets.SOUNDBOARD_SUPABASE_URL }}
+          SOUNDBOARD_SUPABASE_ANON_KEY: ${{ secrets.SOUNDBOARD_SUPABASE_ANON_KEY }}
+        run: |
+          import os
+          from pathlib import Path
+
+          url = os.environ["SOUNDBOARD_SUPABASE_URL"]
+          key = os.environ["SOUNDBOARD_SUPABASE_ANON_KEY"]
+          Path("src/soundboard/_baked_defaults.py").write_text(
+              f"SUPABASE_URL = {url!r}\nSUPABASE_ANON_KEY = {key!r}\n"
+          )
+      - run: uv run pyinstaller packaging/linux/soundboard.spec
+      - name: Assemble the AppImage
+        run: |
+          chmod +x packaging/linux/AppRun packaging/linux/build_appimage.sh
+          packaging/linux/build_appimage.sh "soundboard-${{ github.event.release.tag_name }}-linux-x86_64.AppImage"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: soundboard-${{ github.event.release.tag_name }}-linux-x86_64.AppImage
