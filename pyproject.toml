@@ -25,6 +25,7 @@ dev = [
     "ruff>=0.6",
     "pytest-qt>=4.4.0",
 ]
+packaging = ["pyinstaller>=6.0"]
 
 [build-system]
 requires = ["hatchling"]
