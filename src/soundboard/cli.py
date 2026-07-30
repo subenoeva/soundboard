@@ -83,6 +83,8 @@ def build_parser() -> argparse.ArgumentParser:
     cat_rm = categories_sub.add_parser("rm")
     cat_rm.add_argument("name")
 
+    subparsers.add_parser("gui", help="launch the PySide6 desktop window")
+
     return parser
 
 
@@ -300,4 +302,8 @@ def main(argv: list[str] | None = None) -> int:
         return _sounds(args)
     if args.command == "categories":
         return _categories(args)
+    if args.command == "gui":
+        from soundboard.ui.app import run_gui
+
+        return run_gui()
     raise AssertionError(f"unhandled command {args.command!r}")  # argparse guarantees a match
