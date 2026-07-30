@@ -81,6 +81,59 @@ uv run soundboard run --mic "nombre o parte del micrófono" --out "CABLE Input" 
 Con el motor corriendo, escribe una tecla y pulsa Enter para disparar ese
 clip, `stop` para silenciar todo lo que esté sonando, `quit` para salir.
 
+## Biblioteca de sonidos (Supabase)
+
+La biblioteca es compartida entre usuarios: cualquiera autenticado puede añadir
+sonidos y verlos todos, pero solo puede editar o borrar los suyos.
+
+### Configuración
+
+Definí estas variables de entorno (o agregalas a `<config>/soundboard/settings.json`
+bajo la clave `"supabase": {"url": ..., "anon_key": ...}`):
+
+```bash
+export SOUNDBOARD_SUPABASE_URL="https://tu-proyecto.supabase.co"
+export SOUNDBOARD_SUPABASE_ANON_KEY="tu-anon-key"
+```
+
+El anon key es público por diseño de Supabase — la protección la da RLS (Row Level
+Security), no el secreto del key.
+
+### Cuenta
+
+```bash
+uv run soundboard auth signup --email vos@ejemplo.com
+uv run soundboard auth login --email vos@ejemplo.com
+uv run soundboard auth whoami
+uv run soundboard auth logout
+```
+
+La sesión se guarda en el almacén de credenciales del sistema operativo — no hace
+falta volver a loguearse en cada ejecución.
+
+### Sonidos y categorías
+
+```bash
+uv run soundboard categories add memes
+uv run soundboard sounds add clips/airhorn.wav --name airhorn --category memes
+uv run soundboard sounds list
+uv run soundboard sounds list --mine
+uv run soundboard sounds edit <id> --gain-db -3 --loop
+uv run soundboard sounds rm <id>
+```
+
+### Reproducir sonidos de la biblioteca
+
+`--sound` acepta, además de una ruta local (como en la fase 1), un id o nombre de la
+biblioteca compartida:
+
+```bash
+uv run soundboard run --mic "..." --out "CABLE Input" --sound applause=<id-o-nombre>
+```
+
+Al reproducir por primera vez se descarga y cachea en disco; las siguientes veces se
+usa la copia local.
+
 ## Arquitectura
 
 Dos streams PortAudio independientes (entrada y salida) — cada dispositivo
@@ -154,6 +207,16 @@ uv run ruff check .
 uv run mypy
 ```
 
+Los tests de RLS (`tests/integration/test_rls.py`) necesitan un stack local de
+Supabase y están excluidos por defecto (marcador `supabase`, igual que `hardware`):
+
+```bash
+supabase start
+uv run pytest -m supabase
+```
+
+Requiere [Supabase CLI](https://supabase.com/docs/guides/cli) y Docker.
+
 El diseño completo y el plan de implementación viven en
 [`docs/superpowers/`](docs/superpowers/).
 
@@ -161,9 +224,9 @@ El diseño completo y el plan de implementación viven en
 
 Fases futuras, no implementadas todavía:
 
-- **Biblioteca de sonidos**: multiusuario sobre Supabase (Postgres + Storage + Auth),
-  caché local de reproducción, CRUD con RLS por dueño — ver
-  [`docs/superpowers/specs/2026-07-29-supabase-sounds-design.md`](docs/superpowers/specs/2026-07-29-supabase-sounds-design.md).
+- **Biblioteca de sonidos**: ✅ diseñada e implementada — multiusuario sobre Supabase
+  (Postgres + Storage + Auth), caché local de reproducción, CRUD con RLS por dueño.
+  Ver [`docs/superpowers/specs/2026-07-29-supabase-sounds-design.md`](docs/superpowers/specs/2026-07-29-supabase-sounds-design.md).
 - **Interfaz gráfica**: ventana PySide6, rejilla de clips, arrastrar y
   soltar, bandeja del sistema, atajos globales.
 - **Enrutado automático**: detección/creación del dispositivo virtual sin
