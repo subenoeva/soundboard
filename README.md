@@ -4,8 +4,8 @@ Soundboard multiplataforma que inyecta clips de audio y tu micrófono real,
 mezclados, en un dispositivo de entrada virtual — para que Discord (u otra
 app de voz) reciba ambos como si vinieran de un único micrófono.
 
-> **Estado:** motor de audio + CLI de verificación, y biblioteca de sonidos
-> multiusuario sobre Supabase, implementados. La interfaz gráfica, el
+> **Estado:** motor de audio, CLI de verificación, biblioteca de sonidos
+> multiusuario sobre Supabase e interfaz gráfica (PySide6), implementados. El
 > enrutado automático del dispositivo virtual y la cadena de efectos son
 > fases futuras — ver [Roadmap](#roadmap).
 
@@ -134,6 +134,22 @@ uv run soundboard run --mic "..." --out "CABLE Input" --sound applause=<id-o-nom
 Al reproducir por primera vez se descarga y cachea en disco; las siguientes veces se
 usa la copia local.
 
+## Interfaz gráfica
+
+```bash
+uv run soundboard gui
+```
+
+La primera vez pide iniciar sesión (si no había una guardada) y elegir micrófono, cable
+virtual y tamaño de la rejilla; las siguientes veces reusa esa configuración desde
+`<config>/soundboard/ui_layout.json`. Un clic dispara la celda; arrastrar un archivo de
+audio sobre una celda vacía la asigna; clic derecho permite asignar un atajo de teclado
+o vaciar la celda. Cerrar la ventana la minimiza a la bandeja del sistema — "Salir" desde
+ahí (o desde el menú de la ventana) corta el motor de audio de verdad.
+
+Los atajos de teclado funcionan incluso sin que la ventana tenga el foco, salvo en
+Linux con Wayland, donde los atajos globales no funcionan por diseño del protocolo.
+
 ## Arquitectura
 
 Dos streams PortAudio independientes (entrada y salida) — cada dispositivo
@@ -227,8 +243,10 @@ Fases futuras, no implementadas todavía:
 - **Biblioteca de sonidos**: ✅ diseñada e implementada — multiusuario sobre Supabase
   (Postgres + Storage + Auth), caché local de reproducción, CRUD con RLS por dueño.
   Ver [`docs/superpowers/specs/2026-07-29-supabase-sounds-design.md`](docs/superpowers/specs/2026-07-29-supabase-sounds-design.md).
-- **Interfaz gráfica**: ventana PySide6, rejilla de clips, arrastrar y
-  soltar, bandeja del sistema, atajos globales.
+- **Interfaz gráfica**: ✅ diseñada e implementada — ventana PySide6, rejilla de clips
+  locales y de la biblioteca Supabase, arrastrar y soltar, bandeja del sistema, atajos
+  globales configurables por celda. Ver
+  [`docs/superpowers/specs/2026-07-30-gui-design.md`](docs/superpowers/specs/2026-07-30-gui-design.md).
 - **Enrutado automático**: detección/creación del dispositivo virtual sin
   pasos manuales (`routing.windows`, `routing.linux`).
 - **Efectos**: cadena de efectos sobre el bus de micrófono (protocolo
