@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -5,7 +6,7 @@ import pytest
 import soundfile as sf
 
 from soundboard.audio.fake_backend import FakeBackend
-from soundboard.cli import _run, build_parser, parse_sound_argument
+from soundboard.cli import _run, build_parser, main, parse_sound_argument
 from soundboard.library.cache import SoundCache
 from soundboard.remote import categories, sounds
 from soundboard.remote.client import SessionStore
@@ -317,3 +318,38 @@ def test_importing_cli_does_not_import_pyside6() -> None:
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_main_launches_the_gui_when_invoked_without_any_argument(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+
+    def fake_run_gui() -> int:
+        calls.append(True)
+        return 0
+
+    monkeypatch.setattr("soundboard.ui.app.run_gui", fake_run_gui)
+    monkeypatch.setattr(sys, "argv", ["soundboard"])
+
+    exit_code = main()
+
+    assert exit_code == 0
+    assert calls == [True]
+
+
+def test_main_with_an_empty_explicit_argv_also_launches_the_gui(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+
+    def fake_run_gui() -> int:
+        calls.append(True)
+        return 0
+
+    monkeypatch.setattr("soundboard.ui.app.run_gui", fake_run_gui)
+
+    exit_code = main([])
+
+    assert exit_code == 0
+    assert calls == [True]

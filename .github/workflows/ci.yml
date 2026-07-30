@@ -20,7 +20,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libegl1 libxkbcommon0 libxcb-cursor0 libgl1 libdbus-1-3
       - uses: astral-sh/setup-uv@v5
-      - run: uv sync --all-groups
+      - run: uv sync --group dev
       - run: uv run ruff check .
       - run: uv run mypy
       - run: uv run pytest -v
@@ -34,6 +34,6 @@ jobs:
         with:
           version: latest
       - run: supabase start
-      - run: uv sync --all-groups
+      - run: uv sync --group dev
       - run: uv run pytest tests/integration/test_rls.py -m supabase -v
       - run: supabase stop

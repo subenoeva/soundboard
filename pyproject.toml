@@ -25,6 +25,7 @@ dev = [
     "ruff>=0.6",
     "pytest-qt>=4.4.0",
 ]
+packaging = ["pyinstaller>=6.0"]
 
 [build-system]
 requires = ["hatchling"]
@@ -52,7 +53,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 [tool.mypy]
 python_version = "3.13"
 strict = true
-files = ["src", "tests"]
+files = ["src", "tests", "packaging"]
 
 [[tool.mypy.overrides]]
 module = ["sounddevice.*", "soxr.*", "soundfile.*"]
@@ -64,4 +65,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["pynput.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["soundboard._baked_defaults"]
 ignore_missing_imports = true

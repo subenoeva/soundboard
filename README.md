@@ -37,6 +37,24 @@ uv sync
 `soundfile`, `soxr`, `platformdirs`) y las de desarrollo (`pytest`, `mypy`,
 `ruff`) en un entorno virtual local (`.venv`).
 
+### Descargar el ejecutable (sin instalar Python)
+
+Para amigos que solo quieren correr la app, sin clonar el repo ni instalar `uv`:
+descarga el binario de la [página de Releases](https://github.com/subenoeva/soundboard/releases) —
+`soundboard-vX.Y.Z-windows.exe` o `soundboard-vX.Y.Z-linux-x86_64.AppImage`. Viene
+configurado para hablar contra la biblioteca de sonidos compartida, sin setear nada.
+
+Limitaciones que se heredan del proyecto:
+
+- **Windows**: igual hace falta instalar [VB-CABLE](https://vb-audio.com/Cable/) aparte
+  (no se puede empaquetar un driver de kernel firmado). El `.exe` no está firmado
+  digitalmente — si Windows SmartScreen avisa "editor desconocido", es normal;
+  "más información → ejecutar de todas formas".
+- **Linux**: igual hace falta configurar un null-sink de PipeWire/PulseAudio a mano (ver
+  arriba). Los atajos globales no funcionan bajo Wayland. Si no hay `gnome-keyring` ni
+  `kwalletd` corriendo, guardar la sesión puede fallar — asegúrate de tener uno de los
+  dos activo.
+
 ### Dispositivo virtual (requisito externo)
 
 - **Windows:** instala [VB-CABLE](https://vb-audio.com/Cable/) (gratuito) o
@@ -247,6 +265,9 @@ Fases futuras, no implementadas todavía:
   locales y de la biblioteca Supabase, arrastrar y soltar, bandeja del sistema, atajos
   globales configurables por celda. Ver
   [`docs/superpowers/specs/2026-07-30-gui-design.md`](docs/superpowers/specs/2026-07-30-gui-design.md).
+- **Ejecutables standalone**: ✅ diseñados e implementados — releases automáticas vía
+  `release-please` + PyInstaller, ver
+  [`docs/superpowers/specs/2026-07-30-standalone-executables-design.md`](docs/superpowers/specs/2026-07-30-standalone-executables-design.md).
 - **Enrutado automático**: detección/creación del dispositivo virtual sin
   pasos manuales (`routing.windows`, `routing.linux`).
 - **Efectos**: cadena de efectos sobre el bus de micrófono (protocolo

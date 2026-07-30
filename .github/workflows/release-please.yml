@@ -1,0 +1,25 @@
+name: release-please
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          # A workflow run authenticated with the default GITHUB_TOKEN cannot trigger
+          # other workflows — the "release: published" event release-build.yml listens
+          # for would never fire, silently breaking the whole release chain. A PAT/App
+          # token sidesteps that GitHub restriction. Create a fine-grained PAT with
+          # `contents: write` + `pull-requests: write` on this repo and store it as the
+          # RELEASE_PLEASE_TOKEN secret (manual, one-time repo setup — this workflow
+          # cannot create the secret itself).
+          # See docs/superpowers/specs/2026-07-30-standalone-executables-design.md.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}

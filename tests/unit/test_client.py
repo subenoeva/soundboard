@@ -1,4 +1,6 @@
 import json
+import sys
+import types
 from pathlib import Path
 from typing import Any
 
@@ -82,6 +84,36 @@ def test_load_supabase_config_falls_back_to_settings_file(tmp_path: Path) -> Non
 def test_load_supabase_config_raises_a_clear_error_when_unconfigured(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="SOUNDBOARD_SUPABASE_URL"):
         load_supabase_config(env={}, settings_path=tmp_path / "missing.json")
+
+
+def test_load_supabase_config_falls_back_to_baked_defaults(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    baked = types.ModuleType("soundboard._baked_defaults")
+    baked.SUPABASE_URL = "https://baked.supabase.co"  # type: ignore[attr-defined]
+    baked.SUPABASE_ANON_KEY = "baked-key"  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "soundboard._baked_defaults", baked)
+
+    url, key = load_supabase_config(env={}, settings_path=tmp_path / "missing.json")
+
+    assert (url, key) == ("https://baked.supabase.co", "baked-key")
+
+
+def test_load_supabase_config_prefers_env_over_baked_defaults(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    baked = types.ModuleType("soundboard._baked_defaults")
+    baked.SUPABASE_URL = "https://baked.supabase.co"  # type: ignore[attr-defined]
+    baked.SUPABASE_ANON_KEY = "baked-key"  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "soundboard._baked_defaults", baked)
+    env = {
+        "SOUNDBOARD_SUPABASE_URL": "https://env.supabase.co",
+        "SOUNDBOARD_SUPABASE_ANON_KEY": "env-key",
+    }
+
+    url, key = load_supabase_config(env=env, settings_path=tmp_path / "missing.json")
+
+    assert (url, key) == ("https://env.supabase.co", "env-key")
 
 
 class _FakeQuery:

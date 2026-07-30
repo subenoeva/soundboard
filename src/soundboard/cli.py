@@ -291,7 +291,10 @@ def _categories(
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    effective_argv = sys.argv[1:] if argv is None else argv
+    if not effective_argv:
+        effective_argv = ["gui"]
+    args = build_parser().parse_args(effective_argv)
     if args.command == "devices":
         return _print_devices(PortAudioBackend())
     if args.command == "run":
