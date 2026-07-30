@@ -295,3 +295,25 @@ def test_run_sound_resolves_a_remote_id_when_no_local_file_matches(
 
     assert exit_code == 0
     assert np.max(backend.captured[9]) > 0.4
+
+
+def test_gui_subcommand_is_available() -> None:
+    args = build_parser().parse_args(["gui"])
+
+    assert args.command == "gui"
+
+
+def test_importing_cli_does_not_import_pyside6() -> None:
+    # A fresh subprocess, not a plain `sys.modules` check in-process: other test
+    # modules in the same pytest run already import PySide6 for their own widget
+    # tests, which would make an in-process check pass or fail depending on test
+    # order rather than on whether `cli.py` itself ever imports it.
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import soundboard.cli, sys; assert 'PySide6' not in sys.modules"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
