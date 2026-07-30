@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Soundboard
+Exec=soundboard
+Icon=soundboard
+Categories=AudioVideo;
+Terminal=false
