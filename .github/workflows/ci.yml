@@ -42,7 +42,10 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned instead of "latest": that setting makes the action resolve the
+          # newest release through GitHub's API, which is easy to bounce off the
+          # unauthenticated rate limit on a shared runner IP (as happened here).
+          version: 2.110.0
       - run: supabase start
       - run: uv sync --group dev
       - run: uv run pytest tests/integration/test_rls.py -m supabase -v
