@@ -21,3 +21,16 @@ jobs:
       - run: uv run ruff check .
       - run: uv run mypy
       - run: uv run pytest -v
+
+  rls:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase start
+      - run: uv sync --all-groups
+      - run: uv run pytest tests/integration/test_rls.py -m supabase -v
+      - run: supabase stop
