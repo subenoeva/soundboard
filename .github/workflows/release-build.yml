@@ -3,6 +3,11 @@ name: release-build
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (e.g. v1.2.3)"
+        required: true
 
 permissions:
   contents: write
@@ -10,8 +15,12 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --group packaging
       - name: Bake Supabase config
@@ -31,16 +40,20 @@ jobs:
       - run: uv run pyinstaller packaging/windows/soundboard.spec
       - name: Rename artifact to the release asset name
         shell: bash
-        run: mv dist/soundboard.exe "soundboard-${{ github.event.release.tag_name }}-windows.exe"
+        run: mv dist/soundboard.exe "soundboard-${{ env.TAG }}-windows.exe"
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.release.tag_name }}
-          files: soundboard-${{ github.event.release.tag_name }}-windows.exe
+          tag_name: ${{ env.TAG }}
+          files: soundboard-${{ env.TAG }}-windows.exe
 
   linux:
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - name: Install PortAudio and Qt runtime libraries
         run: sudo apt-get update && sudo apt-get install -y libportaudio2 libegl1 libxkbcommon0 libxcb-cursor0 libgl1 libdbus-1-3
       - uses: astral-sh/setup-uv@v5
@@ -63,8 +76,8 @@ jobs:
       - name: Assemble the AppImage
         run: |
           chmod +x packaging/linux/AppRun packaging/linux/build_appimage.sh
-          packaging/linux/build_appimage.sh "soundboard-${{ github.event.release.tag_name }}-linux-x86_64.AppImage"
+          packaging/linux/build_appimage.sh "soundboard-${{ env.TAG }}-linux-x86_64.AppImage"
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.release.tag_name }}
-          files: soundboard-${{ github.event.release.tag_name }}-linux-x86_64.AppImage
+          tag_name: ${{ env.TAG }}
+          files: soundboard-${{ env.TAG }}-linux-x86_64.AppImage
