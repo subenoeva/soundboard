@@ -52,10 +52,19 @@ def _default_settings_path() -> Path:
     return Path(platformdirs.user_config_dir("soundboard")) / "settings.json"
 
 
+def _baked_config() -> tuple[str | None, str | None]:
+    try:
+        from soundboard._baked_defaults import SUPABASE_ANON_KEY, SUPABASE_URL
+    except ImportError:
+        return None, None
+    return SUPABASE_URL, SUPABASE_ANON_KEY
+
+
 def load_supabase_config(
     env: Mapping[str, str] | None = None, settings_path: Path | None = None
 ) -> tuple[str, str]:
-    """Resolve ``(url, anon_key)`` from the environment, falling back to settings.json."""
+    """Resolve ``(url, anon_key)``: environment, then ``settings.json``, then the
+    baked-in defaults a packaged executable ships with."""
     resolved_env: Mapping[str, str] = os.environ if env is None else env
     settings_path = settings_path or _default_settings_path()
 
@@ -66,6 +75,10 @@ def load_supabase_config(
         supabase_cfg = data.get("supabase", {})
         url = url or supabase_cfg.get("url")
         key = key or supabase_cfg.get("anon_key")
+    if not url or not key:
+        baked_url, baked_key = _baked_config()
+        url = url or baked_url
+        key = key or baked_key
     if not url or not key:
         raise RuntimeError(
             "Supabase is not configured: set SOUNDBOARD_SUPABASE_URL and "

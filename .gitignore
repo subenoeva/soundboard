@@ -17,6 +17,7 @@ htmlcov/
 # Packaging output
 *.spec.bak
 *.AppImage
+src/soundboard/_baked_defaults.py
 
 # Local audio scratch
 scratch/

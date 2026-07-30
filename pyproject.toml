@@ -66,3 +66,7 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["pynput.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["soundboard._baked_defaults"]
+ignore_missing_imports = true
