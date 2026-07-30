@@ -11,6 +11,8 @@ dependencies = [
     "platformdirs>=4.11.0",
     "supabase>=2.31.0",
     "keyring>=25.7.0",
+    "PySide6>=6.11.1",
+    "pynput>=1.8.1",
 ]
 
 [project.scripts]
@@ -21,6 +23,7 @@ dev = [
     "pytest>=8.0",
     "mypy>=1.11",
     "ruff>=0.6",
+    "pytest-qt>=4.4.0",
 ]
 
 [build-system]
@@ -32,10 +35,11 @@ packages = ["src/soundboard"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not hardware and not supabase'"
+addopts = "-m 'not hardware and not supabase and not display'"
 markers = [
     "hardware: requires a real audio device; deselected by default",
     "supabase: requires a local Supabase stack (Docker); deselected by default",
+    "display: spawns a real OS-level keyboard hook; deselected by default",
 ]
 
 [tool.ruff]
@@ -56,4 +60,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["keyring.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["pynput.*"]
 ignore_missing_imports = true
