@@ -33,7 +33,7 @@ Item {
                 cellState: model.cellState
                 progress: model.progress
                 onClicked: App.gridModel.play(index)
-                onRightClicked: contextMenu.openFor(index, model.cellState)
+                onRightClicked: contextMenu.openFor(index, model.cellState, model.shortcut)
                 onFileDropped: (url) => App.gridModel.assign_local(index, url)
             }
         }
@@ -64,7 +64,10 @@ Item {
         id: contextMenu
         property int cellIndex: -1
         property string cellState: "empty"
-        function openFor(index, state) { cellIndex = index; cellState = state; popup() }
+        property string cellShortcut: ""
+        function openFor(index, state, shortcut) {
+            cellIndex = index; cellState = state; cellShortcut = shortcut || ""; popup()
+        }
         MenuItem {
             text: "Asignar desde biblioteca"
             enabled: contextMenu.cellState === "empty"
@@ -73,7 +76,10 @@ Item {
         MenuItem {
             text: "Asignar atajo"
             enabled: contextMenu.cellState !== "empty"
-            onTriggered: shortcutPopup.openFor(contextMenu.cellIndex)
+            onTriggered: {
+                shortcutPopup.currentShortcut = contextMenu.cellShortcut
+                shortcutPopup.openFor(contextMenu.cellIndex)
+            }
         }
         MenuItem {
             text: "Color"
