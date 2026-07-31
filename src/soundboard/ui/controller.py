@@ -19,7 +19,7 @@ from soundboard.hotkeys import HotkeyManager
 from soundboard.library.cache import SoundCache
 from soundboard.remote import auth
 from soundboard.remote.models import RemoteClient, Session
-from soundboard.ui import session_actions
+from soundboard.ui import session_actions, update_actions
 from soundboard.ui.engine_bridge import EngineBridge
 from soundboard.ui.engine_factory import Engine, Store, build_engine
 from soundboard.ui.grid_model import GridModel
@@ -30,6 +30,7 @@ from soundboard.ui.layout_store import (
     trim_cells_to_bounds,
 )
 from soundboard.ui.library_model import LibraryModel
+from soundboard.updater.service import UpdateService
 
 _DEFAULT_ROWS = 4
 _DEFAULT_COLS = 6
@@ -55,6 +56,7 @@ class AppController(QObject):
         cache: SoundCache,
         layout_path: Path,
         engine_factory: Callable[[GridLayout], Engine] | None = None,
+        update_service: UpdateService | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -77,10 +79,12 @@ class AppController(QObject):
         self._grid: GridModel | None = None
         self._bridge: EngineBridge | None = None
         self._library = LibraryModel(client, parent=self)
+        self._update = update_actions.build_model(self, update_service)
 
     # -- lifecycle ------------------------------------------------------------
 
     def bootstrap(self) -> None:
+        update_actions.start_launch_check(self._update)
         self._session = session_actions.restore(self._client, self._store)
         if self._session is None:
             self._set_view("login")
@@ -278,6 +282,9 @@ class AppController(QObject):
     def _get_library_model(self) -> QObject:
         return self._library
 
+    def _get_update_model(self) -> QObject:
+        return self._update
+
     view = Property(str, _get_view, notify=viewChanged)
     userEmail = Property(str, _get_user_email, notify=sessionChanged)
     loginError = Property(str, _get_login_error, notify=loginErrorChanged)
@@ -297,3 +304,4 @@ class AppController(QObject):
     gridModel = Property(QObject, _get_grid_model, notify=gridModelChanged)
     bridge = Property(QObject, _get_bridge, notify=bridgeChanged)
     libraryModel = Property(QObject, _get_library_model, constant=True)
+    updateModel = Property(QObject, _get_update_model, constant=True)

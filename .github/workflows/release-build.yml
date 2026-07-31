@@ -81,3 +81,37 @@ jobs:
         with:
           tag_name: ${{ env.TAG }}
           files: soundboard-${{ env.TAG }}-linux-x86_64.AppImage
+
+  # Publishes the signed manifest the self-updater reads. Because it needs both builds,
+  # its output only appears once the release is complete — which is exactly how the
+  # updater tells a finished release from one whose binaries are still building, and how
+  # a half-published release stays invisible to everyone.
+  sign:
+    runs-on: ubuntu-latest
+    needs: [windows, linux]
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: astral-sh/setup-uv@v5
+      - name: Download the published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'soundboard-*'
+      - name: Build and sign SHA256SUMS
+        env:
+          SIGNING_KEY: ${{ secrets.SOUNDBOARD_UPDATE_SIGNING_KEY }}
+        run: |
+          uv run --no-project --with cryptography python packaging/sign_release.py \
+            "$TAG" \
+            "soundboard-${TAG}-windows.exe" \
+            "soundboard-${TAG}-linux-x86_64.AppImage" \
+            --secret-key "$SIGNING_KEY"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          files: |
+            SHA256SUMS
+            SHA256SUMS.sig

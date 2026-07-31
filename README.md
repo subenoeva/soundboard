@@ -64,6 +64,34 @@ Platform caveats:
   session needs a running secret service — make sure `gnome-keyring` or `kwalletd` is
   active.
 
+### Updates
+
+The desktop app checks for a newer release on launch and shows a banner when it finds
+one. Nothing is downloaded until you press **Actualizar**; once the download is verified
+and installed the banner offers **Reiniciar ahora**. There is also a **Buscar
+actualizaciones** button in the header for checking on demand, which — unlike the launch
+check — tells you when you are already on the latest version.
+
+Every release ships a `SHA256SUMS` manifest and an Ed25519 signature over it
+(`SHA256SUMS.sig`). The app verifies that signature against a public key compiled into
+the binary, then checks the download against the digest the manifest lists, before
+anything is written over the running executable. A download that fails either check is
+deleted and never installed. The update is refused rather than escalated if the folder
+holding the binary is not writable — move the application somewhere you own, or relaunch
+it with the privileges that folder needs.
+
+To verify a download by hand:
+
+```bash
+tail -n +2 SHA256SUMS | sha256sum -c    # skip the leading `version vX.Y.Z` line
+```
+
+Turn the launch check off by setting `SOUNDBOARD_NO_UPDATE_CHECK=1`, or by adding
+`"update_check": false` to `settings.json` (see [Configuration](#configuration)). The
+manual button keeps working either way. Builds run from a source checkout or installed
+with `pip` never self-update — there is no single file to replace — and hide the button
+entirely.
+
 ### From source
 
 ```bash
@@ -264,6 +292,7 @@ guarded by a lock that covers the whole operation (the class docstring explains 
 | `audio/` | Real-time engine: backends, ring buffer, drift correction, voices, mixer, `AudioEngine`. Does no I/O and imports no GUI. |
 | `remote/` | Supabase-backed shared library: session/auth, sounds and categories CRUD, PCM resolution for playback. |
 | `library/` | Upload import (decode, hash, gain measurement) and the on-disk cache for downloaded PCM. |
+| `updater/` | Self-update: signed release manifest, verified download, in-place binary swap. Imports no GUI. |
 | `ui/` | Qt Quick desktop GUI — the only package that imports PySide6. |
 | `hotkeys.py` | Global keyboard shortcuts behind a `HotkeyManager` protocol; the only module that imports `pynput`. |
 | `cli.py` | Subcommands: `devices`, `run`, `auth`, `sounds`, `categories`, `gui`. |
@@ -271,7 +300,7 @@ guarded by a lock that covers the whole operation (the class docstring explains 
 Every layer with a real external dependency sits behind a protocol with an in-memory
 double, so the whole suite runs without audio hardware, a display or a network:
 `AudioBackend`/`FakeBackend`, `RemoteClient`/`FakeRemoteClient`,
-`HotkeyManager`/`FakeHotkeyManager`.
+`HotkeyManager`/`FakeHotkeyManager`, `ReleaseFeed`/`FakeReleaseFeed`.
 
 ## Development
 
@@ -300,8 +329,6 @@ workflow builds the Windows executable and the Linux AppImage with PyInstaller.
 
 ## Roadmap
 
-- **Self-updater** — check the Releases feed on launch and update the installed binary in
-  place, so users are not left on whatever version they downloaded once.
 - **Automatic routing** — detect or create the virtual device without manual steps
   (`routing.windows`, `routing.linux`).
 - **Effects** — an effects chain over the microphone bus (the `Effect` protocol is

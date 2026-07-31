@@ -10,14 +10,26 @@ Item {
         userEmail: App.userEmail
         micName: App.micName
         outName: App.outName
+        canCheckForUpdates: App.updateModel.supported
         onSettingsClicked: App.open_settings()
         onStopAllClicked: App.stop_all()
         onLogOutClicked: App.log_out()
+        onCheckForUpdatesClicked: App.updateModel.check(true)
+    }
+
+    UpdateBanner {
+        id: updateBanner
+        anchors { top: header.bottom; left: parent.left; right: parent.right }
+        updateState: App.updateModel.state
+        version: App.updateModel.version
+        progress: App.updateModel.progress
+        onDownloadClicked: App.updateModel.download()
+        onRestartClicked: App.updateModel.restart()
     }
 
     GridView {
         id: grid
-        anchors { top: header.bottom; left: parent.left; right: parent.right;
+        anchors { top: updateBanner.bottom; left: parent.left; right: parent.right;
                   bottom: footer.top; margins: Theme.pad }
         model: App.gridModel
         interactive: false

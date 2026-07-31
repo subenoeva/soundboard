@@ -1194,6 +1194,8 @@ name = "soundboard"
 version = "0.3.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
+    { name = "httpx" },
     { name = "keyring" },
     { name = "numpy" },
     { name = "platformdirs" },
@@ -1218,6 +1220,8 @@ packaging = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=45.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "keyring", specifier = ">=25.7.0" },
     { name = "numpy", specifier = ">=2.5.1" },
     { name = "platformdirs", specifier = ">=4.11.0" },
