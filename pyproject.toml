@@ -1,6 +1,6 @@
 [project]
 name = "soundboard"
-version = "0.2.0"
+version = "0.2.1"
 description = "Cross-platform soundboard that feeds clips and your microphone into a virtual input device"
 requires-python = ">=3.13"
 dependencies = [
