@@ -14,7 +14,14 @@ COMPONENTS = sorted(p for p in (QML_DIR / "components").glob("*.qml"))
 
 def test_components_exist() -> None:
     names = {p.name for p in COMPONENTS}
-    assert {"ClipPad.qml", "HeaderBar.qml", "VUMeter.qml", "Toast.qml"} <= names
+    assert {"ClipPad.qml", "HeaderBar.qml", "VUMeter.qml", "Toast.qml",
+            "LibraryPopup.qml", "ShortcutPopup.qml", "ColorPopup.qml"} <= names
+
+
+def test_views_exist() -> None:
+    names = {p.name for p in QML_DIR.glob("*.qml")}
+    assert {"Main.qml", "LoginView.qml", "DeviceSetupView.qml",
+            "BoardView.qml", "Theme.qml"} <= names
 
 
 @pytest.mark.parametrize("qml_file", COMPONENTS, ids=lambda p: p.name)
