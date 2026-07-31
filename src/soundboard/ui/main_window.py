@@ -23,11 +23,12 @@ from soundboard.audioio import load_mono_48k
 from soundboard.hotkeys import HotkeyManager
 from soundboard.library.cache import SoundCache
 from soundboard.remote import sounds
-from soundboard.remote.models import RemoteClient
+from soundboard.remote.models import RemoteClient, Session, Sound
 from soundboard.ui.clip_button import ClipButton, ClipState
 from soundboard.ui.download_worker import DownloadWorker
 from soundboard.ui.grid import ClipGrid
 from soundboard.ui.layout_store import Cell, GridLayout, LocalSource, RemoteSource, save_layout
+from soundboard.ui.upload_worker import UploadWorker
 
 
 class Engine(Protocol):
@@ -52,6 +53,7 @@ class MainWindow(QMainWindow):
         self,
         engine: Engine,
         client: RemoteClient,
+        session: Session,
         cache: SoundCache,
         hotkeys: HotkeyManager,
         layout: GridLayout,
@@ -64,6 +66,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Soundboard")
         self._engine = engine
         self._client = client
+        self._session = session
         self._cache = cache
         self._hotkeys = hotkeys
         self._layout = layout
@@ -74,6 +77,7 @@ class MainWindow(QMainWindow):
         )
         self._pool = QThreadPool.globalInstance()
         self._active_downloads: set[DownloadWorker] = set()
+        self._active_uploads: set[UploadWorker] = set()
 
         self._grid = ClipGrid(layout.rows, layout.cols)
         self.setCentralWidget(self._grid)
@@ -151,7 +155,32 @@ class MainWindow(QMainWindow):
             self._message_box(self, "No se pudo asignar", str(exc))
             return
         name = Path(path).stem
-        self._set_cell(Cell(index=index, source=LocalSource(path=path), name=name, shortcut=None))
+        button = self._grid.button_at(index)
+        button.set_state(ClipState.LOADING)
+
+        def upload() -> Sound:
+            return sounds.add_sound(self._client, self._session, path, name=name)
+
+        worker = UploadWorker(upload)
+        self._active_uploads.add(worker)
+        worker.signals.finished.connect(
+            lambda sound, i=index, w=worker: self._on_upload_ready(i, w, sound)
+        )
+        worker.signals.failed.connect(
+            lambda message, i=index, w=worker: self._on_upload_failed(i, w, message)
+        )
+        self._pool.start(worker)
+
+    def _on_upload_ready(self, index: int, worker: UploadWorker, sound: Sound) -> None:
+        self._active_uploads.discard(worker)
+        self._set_cell(
+            Cell(index=index, source=RemoteSource(id=sound.id), name=sound.name, shortcut=None)
+        )
+
+    def _on_upload_failed(self, index: int, worker: UploadWorker, message: str) -> None:
+        self._active_uploads.discard(worker)
+        self._grid.button_at(index).set_state(ClipState.EMPTY)
+        self._message_box(self, "No se pudo subir el sonido", message)
 
     def _set_cell(self, cell: Cell) -> None:
         self._layout.cells = [c for c in self._layout.cells if c.index != cell.index] + [cell]
