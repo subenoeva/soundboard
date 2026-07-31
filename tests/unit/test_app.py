@@ -149,3 +149,71 @@ def test_run_gui_aborts_if_the_device_dialog_is_cancelled_after_a_missing_device
     )
 
     assert exit_code == 1
+
+
+def test_run_gui_passes_the_restored_session_to_the_main_window(
+    qtbot: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = FakeRemoteClient()
+    session = client.sign_in_as_new_user("a@x.com")
+    store = SessionStore(backend=_DictKeyringBackend())
+    store.save(session)
+    layout_path = tmp_path / "ui_layout.json"
+    save_layout(
+        layout_path,
+        GridLayout(rows=1, cols=1, mic="fake microphone", out="fake cable", blocksize=64),
+    )
+    monkeypatch.setattr(app_module, "default_layout_path", lambda: layout_path)
+    captured: list[object] = []
+    real_main_window = app_module.MainWindow  # type: ignore[attr-defined]
+
+    def _spy_main_window(engine: Any, client_arg: Any, session_arg: Any, *rest: Any, **kwargs: Any) -> Any:
+        captured.append(session_arg)
+        return real_main_window(engine, client_arg, session_arg, *rest, **kwargs)
+
+    monkeypatch.setattr(app_module, "MainWindow", _spy_main_window)
+
+    exit_code = run_gui(
+        client=client, store=store, backend=FakeBackend(), hotkeys=FakeHotkeyManager(),
+        exec_app=False,
+    )
+
+    assert exit_code == 0
+    assert captured == [session]
+
+
+def test_run_gui_passes_the_freshly_logged_in_session_to_the_main_window(
+    qtbot: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = FakeRemoteClient()
+    session = client.sign_in_as_new_user("a@x.com")
+    store = SessionStore(backend=_DictKeyringBackend())  # empty: store.load() is None
+    layout_path = tmp_path / "ui_layout.json"
+    save_layout(
+        layout_path,
+        GridLayout(rows=1, cols=1, mic="fake microphone", out="fake cable", blocksize=64),
+    )
+    monkeypatch.setattr(app_module, "default_layout_path", lambda: layout_path)
+
+    def _fake_exec(self: LoginDialog) -> int:
+        self.session = session
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(LoginDialog, "exec", _fake_exec)
+
+    captured: list[object] = []
+    real_main_window = app_module.MainWindow  # type: ignore[attr-defined]
+
+    def _spy_main_window(engine: Any, client_arg: Any, session_arg: Any, *rest: Any, **kwargs: Any) -> Any:
+        captured.append(session_arg)
+        return real_main_window(engine, client_arg, session_arg, *rest, **kwargs)
+
+    monkeypatch.setattr(app_module, "MainWindow", _spy_main_window)
+
+    exit_code = run_gui(
+        client=client, store=store, backend=FakeBackend(), hotkeys=FakeHotkeyManager(),
+        exec_app=False,
+    )
+
+    assert exit_code == 0
+    assert captured == [session]

@@ -94,8 +94,10 @@ def run_gui(
         login = LoginDialog(client, store)
         if login.exec() != QDialog.DialogCode.Accepted:
             return 1
+        assert login.session is not None
+        session = login.session
     else:
-        auth.require_session(client, store)
+        session = auth.require_session(client, store)
 
     layout_path = default_layout_path()
     layout = load_layout(layout_path)
@@ -117,7 +119,7 @@ def run_gui(
         return 1
 
     cache = SoundCache(_default_cache_dir())
-    window = MainWindow(engine, client, cache, hotkeys, layout, layout_path)
+    window = MainWindow(engine, client, session, cache, hotkeys, layout, layout_path)
     window.show()
 
     if not exec_app:

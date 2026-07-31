@@ -363,10 +363,15 @@ def test_assign_from_library_on_an_occupied_cell_does_nothing(
         cells=[Cell(index=0, source=RemoteSource(id="existing"), name="existing", shortcut=None)],
     )
     calls: list[object] = []
+
+    def _pick_library_sound(*args: Any) -> tuple[str, str]:
+        calls.append(args)
+        return ("sound-id", "applause")
+
     window = MainWindow(
         _RecordingEngine(), client, session, SoundCache(tmp_path / "cache"),
         FakeHotkeyManager(), layout, tmp_path / "ui_layout.json",
-        pick_library_sound=lambda *args: calls.append(args) or ("sound-id", "applause"),
+        pick_library_sound=_pick_library_sound,
     )
     qtbot.addWidget(window)
 
