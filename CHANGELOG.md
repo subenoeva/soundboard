@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/subenoeva/soundboard/compare/v0.2.0...v0.2.1) (2026-07-31)
+
+
+### Bug Fixes
+
+* bundle pynput's platform backend and survive a missing keyring daemon ([#8](https://github.com/subenoeva/soundboard/issues/8)) ([406e62e](https://github.com/subenoeva/soundboard/commit/406e62e4b53e7221fd8335b3a2e368b55680671c))
+
 ## [0.2.0](https://github.com/subenoeva/soundboard/compare/v0.1.0...v0.2.0) (2026-07-30)
 
 
