@@ -3,6 +3,7 @@
 [![CI](https://github.com/subenoeva/soundboard/actions/workflows/ci.yml/badge.svg)](https://github.com/subenoeva/soundboard/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/subenoeva/soundboard)](https://github.com/subenoeva/soundboard/releases)
 [![Python](https://img.shields.io/badge/python-3.13%2B-blue)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 
 Cross-platform soundboard that mixes audio clips with your real microphone and
 writes the result into a virtual input device — so Discord (or any other voice
@@ -86,7 +87,8 @@ uv run soundboard devices
 ### Desktop app
 
 ```bash
-uv run soundboard gui
+uv run soundboard gui   # or just `soundboard` — with no arguments it opens the GUI,
+                        # which is what makes double-clicking the packaged binary work
 ```
 
 On first launch it asks you to sign in (unless a session is already stored) and to pick
@@ -146,6 +148,25 @@ export SOUNDBOARD_SUPABASE_ANON_KEY="your-anon-key"
 The anon key is public by Supabase design — protection comes from RLS, not from keeping
 the key secret.
 
+### Running your own backend
+
+The prebuilt binaries ship pointing at a shared instance. To run your own, create a
+Supabase project and apply the migration in `supabase/migrations/`:
+
+```bash
+supabase link --project-ref <your-project-ref>
+supabase db push
+```
+
+That single migration creates everything the app needs: the `profiles`, `categories` and
+`sounds` tables, their RLS policies and grants, and the private `sounds` storage bucket
+with its access policies. Take the URL and the anon key from *Project Settings → API* and
+configure them as above.
+
+Email confirmation is on by default in a fresh Supabase project, so `auth signup` will
+not let you log in until the address is confirmed. Turn it off under
+*Authentication → Providers → Email* if you would rather skip that step.
+
 ### Account
 
 ```bash
@@ -178,6 +199,20 @@ uv run soundboard run --mic "..." --out "CABLE Input" --sound applause=<id-or-na
 
 The first playback downloads and caches the sound on disk, keyed by content hash;
 later playbacks reuse the local copy.
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| Crackles, dropouts or glitches in what Discord hears | The block size is too small for the machine. Raise `--blocksize` to 512 or 1024 — higher latency, more headroom. |
+| `error: no input device matching '...'` | The substring did not match. Run `soundboard devices` and copy a fragment of the exact name. |
+| Discord hears the clips but not your voice (or vice versa) | `--out` is pointing at the wrong endpoint. It must be the cable's *input* side (`CABLE Input`), and Discord must listen to the *output* side. |
+| `error: Supabase is not configured` | Neither the environment variables nor `settings.json` are set — see [Configuration](#configuration). |
+| `error: no session; run 'soundboard auth login'` | No stored session. Log in once; it persists in the OS credential store. |
+| Signup succeeds but login fails | The email is not confirmed yet. Confirm it, or disable email confirmation in your own project. |
+| Keyboard shortcuts do nothing on Linux | Wayland does not allow global hotkeys. Use an X11 session, or trigger the clips from the window. |
+| Saving the session fails on Linux | No secret service running. Start `gnome-keyring` or `kwalletd`. |
+| Windows SmartScreen warns about an unknown publisher | The release binary is not code-signed. *More info → Run anyway*. |
 
 ## Architecture
 
@@ -265,8 +300,24 @@ workflow builds the Windows executable and the Linux AppImage with PyInstaller.
 
 ## Roadmap
 
+- **Self-updater** — check the Releases feed on launch and update the installed binary in
+  place, so users are not left on whatever version they downloaded once.
 - **Automatic routing** — detect or create the virtual device without manual steps
   (`routing.windows`, `routing.linux`).
 - **Effects** — an effects chain over the microphone bus (the `Effect` protocol is
   designed but not implemented).
 - **macOS** — support via BlackHole.
+
+## License
+
+Copyright (C) 2026 subenoeva
+
+This program is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License as published by the Free Software Foundation, either
+version 3 of the License, or (at your option) any later version. It is distributed in the
+hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the [LICENSE](LICENSE) file
+for the full text.
+
+In practice: forks are welcome, but anything distributed on top of this code has to ship
+its source under the same license.
