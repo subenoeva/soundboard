@@ -11,6 +11,7 @@ import numpy as np
 from PySide6.QtCore import QThreadPool, QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QDialog,
     QInputDialog,
     QMainWindow,
     QMessageBox,
@@ -28,6 +29,7 @@ from soundboard.ui.clip_button import ClipButton, ClipState
 from soundboard.ui.download_worker import DownloadWorker
 from soundboard.ui.grid import ClipGrid
 from soundboard.ui.layout_store import Cell, GridLayout, LocalSource, RemoteSource, save_layout
+from soundboard.ui.library_dialog import LibraryDialog
 from soundboard.ui.upload_worker import UploadWorker
 
 
@@ -48,6 +50,16 @@ def _default_message_box(parent: QWidget, title: str, text: str) -> None:
     QMessageBox.warning(parent, title, text)
 
 
+def _default_pick_library_sound(
+    parent: QWidget, client: RemoteClient
+) -> tuple[str, str] | None:
+    dialog = LibraryDialog(client, parent=parent)
+    if dialog.exec() != QDialog.DialogCode.Accepted:
+        return None
+    assert dialog.selected_id is not None and dialog.selected_name is not None
+    return dialog.selected_id, dialog.selected_name
+
+
 class MainWindow(QMainWindow):
     def __init__(
         self,
@@ -60,6 +72,8 @@ class MainWindow(QMainWindow):
         layout_path: Path,
         message_box: Callable[[QWidget, str, str], None] = _default_message_box,
         prompt_shortcut: Callable[[QWidget, str, str], tuple[str, bool]] | None = None,
+        pick_library_sound: Callable[[QWidget, RemoteClient], tuple[str, str] | None]
+        | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -75,6 +89,7 @@ class MainWindow(QMainWindow):
         self._prompt_shortcut = prompt_shortcut or (
             lambda parent, title, label: QInputDialog.getText(parent, title, label)
         )
+        self._pick_library_sound = pick_library_sound or _default_pick_library_sound
         self._pool = QThreadPool.globalInstance()
         self._active_downloads: set[DownloadWorker] = set()
         self._active_uploads: set[UploadWorker] = set()
@@ -85,6 +100,7 @@ class MainWindow(QMainWindow):
         self._grid.file_dropped.connect(self._assign_local_file)
         self._grid.clear_requested.connect(self._clear_cell)
         self._grid.assign_shortcut_requested.connect(self._assign_shortcut)
+        self._grid.assign_from_library_requested.connect(self._open_library_dialog)
 
         toolbar = QToolBar()
         self._stop_all_action = toolbar.addAction("Detener todo")
@@ -212,6 +228,18 @@ class MainWindow(QMainWindow):
         if cell.shortcut:
             self._hotkeys.unregister(cell.shortcut)
         self._set_cell(Cell(index=cell.index, source=cell.source, name=cell.name, shortcut=combo))
+
+    def _open_library_dialog(self, index: int) -> None:
+        if self._cell_at(index) is not None:
+            return
+        picked = self._pick_library_sound(self, self._client)
+        if picked is None:
+            return
+        selected_id, selected_name = picked
+        self._set_cell(
+            Cell(index=index, source=RemoteSource(id=selected_id), name=selected_name,
+                 shortcut=None)
+        )
 
     def _update_metrics(self) -> None:
         metrics = getattr(self._engine, "metrics", None)
