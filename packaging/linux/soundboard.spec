@@ -7,7 +7,6 @@ pynput has the identical problem: it picks its keyboard/mouse backend via
 importlib.import_module() at runtime based on sys.platform, so static analysis
 never sees pynput._xorg/_base or the Xlib package it needs on X11/Xwayland — the
 packaged app used to die on `import pynput.keyboard` before any window opened.
-See docs/superpowers/specs/2026-07-30-standalone-executables-design.md.
 """
 
 import os

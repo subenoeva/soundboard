@@ -5,7 +5,6 @@ sounddevice resolves PortAudio via ctypes.util.find_library("portaudio") and rai
 instead of falling back to a bundled copy on Linux (unlike its Windows/macOS paths).
 PyInstaller's own ctypes patch that searches inside the bundle only runs on Windows
 (see PyInstaller/loader/pyimod03_ctypes.py) — Linux needs this explicit hook.
-See docs/superpowers/specs/2026-07-30-standalone-executables-design.md.
 """
 
 from __future__ import annotations

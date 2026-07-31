@@ -2,8 +2,6 @@
 # Assembles the PyInstaller onedir build produced by packaging/linux/soundboard.spec
 # into a single-file AppImage. Run from the repo root with one argument: the output
 # .AppImage path (e.g. soundboard-v1.2.3-linux-x86_64.AppImage).
-#
-# See docs/superpowers/specs/2026-07-30-standalone-executables-design.md.
 set -euo pipefail
 
 work_dir="$(mktemp -d)"

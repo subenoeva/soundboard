@@ -74,8 +74,7 @@ def test_rejects_tiny_capacity() -> None:
 def test_concurrent_write_and_read_never_reorders_or_corrupts_frames() -> None:
     """Two real OS threads hammer write()/read() against an undersized buffer.
 
-    This is the spec-mandated RingBuffer concurrency test (see docs/superpowers/
-    specs/2026-07-29-soundboard-design.md, section 9), and also a regression
+    This is the RingBuffer concurrency test, and also a regression
     guard for the lost-update race in write()/read(): before the fix, the two
     methods each split their work across two separate ``with self._lock:``
     blocks, copying the buffer *unlocked* in between, which let a producer
