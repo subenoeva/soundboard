@@ -12,6 +12,17 @@ from soundboard.ui import app as app_module
 from soundboard.ui.app import run_gui
 from soundboard.ui.layout_store import GridLayout, save_layout
 from soundboard.ui.login_dialog import LoginDialog
+from soundboard.ui.main_window import MainWindow
+
+
+def _make_spy_main_window(captured: list[object]) -> Any:
+    """Build a MainWindow stand-in that records the session it was constructed with."""
+
+    def _spy(engine: Any, client_arg: Any, session_arg: Any, *rest: Any, **kwargs: Any) -> Any:
+        captured.append(session_arg)
+        return MainWindow(engine, client_arg, session_arg, *rest, **kwargs)
+
+    return _spy
 
 
 class _DictKeyringBackend:
@@ -149,3 +160,59 @@ def test_run_gui_aborts_if_the_device_dialog_is_cancelled_after_a_missing_device
     )
 
     assert exit_code == 1
+
+
+def test_run_gui_passes_the_restored_session_to_the_main_window(
+    qtbot: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = FakeRemoteClient()
+    session = client.sign_in_as_new_user("a@x.com")
+    store = SessionStore(backend=_DictKeyringBackend())
+    store.save(session)
+    layout_path = tmp_path / "ui_layout.json"
+    save_layout(
+        layout_path,
+        GridLayout(rows=1, cols=1, mic="fake microphone", out="fake cable", blocksize=64),
+    )
+    monkeypatch.setattr(app_module, "default_layout_path", lambda: layout_path)
+    captured: list[object] = []
+    monkeypatch.setattr(app_module, "MainWindow", _make_spy_main_window(captured))
+
+    exit_code = run_gui(
+        client=client, store=store, backend=FakeBackend(), hotkeys=FakeHotkeyManager(),
+        exec_app=False,
+    )
+
+    assert exit_code == 0
+    assert captured == [session]
+
+
+def test_run_gui_passes_the_freshly_logged_in_session_to_the_main_window(
+    qtbot: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = FakeRemoteClient()
+    session = client.sign_in_as_new_user("a@x.com")
+    store = SessionStore(backend=_DictKeyringBackend())  # empty: store.load() is None
+    layout_path = tmp_path / "ui_layout.json"
+    save_layout(
+        layout_path,
+        GridLayout(rows=1, cols=1, mic="fake microphone", out="fake cable", blocksize=64),
+    )
+    monkeypatch.setattr(app_module, "default_layout_path", lambda: layout_path)
+
+    def _fake_exec(self: LoginDialog) -> int:
+        self.session = session
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(LoginDialog, "exec", _fake_exec)
+
+    captured: list[object] = []
+    monkeypatch.setattr(app_module, "MainWindow", _make_spy_main_window(captured))
+
+    exit_code = run_gui(
+        client=client, store=store, backend=FakeBackend(), hotkeys=FakeHotkeyManager(),
+        exec_app=False,
+    )
+
+    assert exit_code == 0
+    assert captured == [session]

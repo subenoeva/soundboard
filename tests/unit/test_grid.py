@@ -29,6 +29,25 @@ def _setup_menu_mock(monkeypatch: Any, action_index: int = 0) -> None:
     monkeypatch.setattr(QMenu, "__init__", patched_init)
 
 
+def _setup_menu_mock_capture(monkeypatch: Any, captured: list[Any]) -> None:
+    """Patch QMenu.__init__ to capture menu instances without selecting an action.
+
+    Args:
+        monkeypatch: pytest's monkeypatch fixture
+        captured: List to append captured menu instances to
+    """
+    original_init = QMenu.__init__
+
+    def patched_init(self: Any, *args: Any, **kwargs: Any) -> Any:
+        result = original_init(self, *args, **kwargs)
+        captured.append(self)
+        # Override exec method to return None (no action selected)
+        self.exec = lambda pos: None
+        return result
+
+    monkeypatch.setattr(QMenu, "__init__", patched_init)
+
+
 def test_grid_creates_rows_times_cols_buttons(qtbot: Any) -> None:
     grid = ClipGrid(rows=2, cols=3)
     qtbot.addWidget(grid)
@@ -79,6 +98,45 @@ def test_context_menu_clear_emits_the_right_signal(qtbot: Any, monkeypatch: Any)
     qtbot.addWidget(grid)
     received: list[int] = []
     grid.clear_requested.connect(received.append)
+
+    grid._show_context_menu(0)
+
+    assert received == [0]
+
+
+def test_context_menu_offers_assign_from_library_only_when_the_cell_is_empty(
+    qtbot: Any, monkeypatch: Any
+) -> None:
+    captured_menus: list[Any] = []
+    _setup_menu_mock_capture(monkeypatch, captured_menus)
+
+    grid = ClipGrid(rows=1, cols=1)
+    qtbot.addWidget(grid)
+
+    grid._show_context_menu(0)
+    assert [a.text() for a in captured_menus[0].actions()] == [
+        "Asignar atajo",
+        "Vaciar celda",
+        "Asignar desde biblioteca",
+    ]
+
+    grid.button_at(0).assign("airhorn", None)
+    grid._show_context_menu(0)
+    assert [a.text() for a in captured_menus[1].actions()] == [
+        "Asignar atajo",
+        "Vaciar celda",
+    ]
+
+
+def test_context_menu_assign_from_library_emits_the_right_signal(
+    qtbot: Any, monkeypatch: Any
+) -> None:
+    _setup_menu_mock(monkeypatch, action_index=2)
+
+    grid = ClipGrid(rows=1, cols=1)
+    qtbot.addWidget(grid)
+    received: list[int] = []
+    grid.assign_from_library_requested.connect(received.append)
 
     grid._show_context_menu(0)
 
