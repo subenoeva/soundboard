@@ -67,3 +67,19 @@ def test_reload_failure_sets_error(qtbot: Any) -> None:
     model.reload()
     qtbot.waitUntil(lambda: not model.loading, timeout=2000)
     assert "boom" in model.errorText  # type: ignore[operator]
+
+
+def test_reload_while_already_loading_is_ignored(
+    qtbot: Any, seeded_client: FakeRemoteClient
+) -> None:
+    model = LibraryModel(seeded_client)
+    model.reload()
+    model.reload()  # popup reopened, or "Reintentar" pressed, before the first landed
+    qtbot.waitUntil(lambda: not model.loading, timeout=2000)
+    assert model.rowCount() == 2
+
+
+def test_data_out_of_range_returns_none(qtbot: Any, seeded_client: FakeRemoteClient) -> None:
+    model = LibraryModel(seeded_client)
+    # A view can ask for a row that a concurrent filter change just removed.
+    assert model.data(model.index(0), LibraryModel.NAME_ROLE) is None

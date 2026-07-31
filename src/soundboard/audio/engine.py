@@ -132,7 +132,7 @@ class AudioEngine:
         """Queue a clip for playback; returns its voice id. Safe from any thread.
 
         The id comes from itertools.count, whose next() is a single C call and
-        therefore safe under concurrent callers (Qt thread + pynput hotkey thread).
+        therefore safe under concurrent callers from different threads.
         """
         voice_id = next(self._voice_ids)
         voice = Voice(pcm, gain=gain, loop=loop, start=start, end=end, voice_id=voice_id)

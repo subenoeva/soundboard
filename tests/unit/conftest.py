@@ -1,4 +1,4 @@
-"""Forces the offscreen Qt platform so widget tests never need a real display.
+"""Forces the offscreen Qt platform so Qt tests never need a real display.
 
 Must run before the first ``QApplication``/``QGuiApplication`` is constructed, which
 happens lazily the first time a test requests pytest-qt's ``qtbot``/``qapp`` fixtures —

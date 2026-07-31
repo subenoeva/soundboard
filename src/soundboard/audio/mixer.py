@@ -83,4 +83,6 @@ class Mixer:
         np.divide(out, CEILING, out=out)
         np.tanh(out, out=out)
         np.multiply(out, CEILING, out=out)
-        self.last_peak = float(np.max(np.abs(out)))
+        # max/-min instead of max(abs(...)): same absolute peak without the temporary
+        # array np.abs would allocate on every block.
+        self.last_peak = float(max(out.max(), -out.min()))

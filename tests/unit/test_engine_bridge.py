@@ -40,7 +40,7 @@ def test_peak_changed_only_fires_on_change(qtbot: object) -> None:
     bridge.peakChanged.connect(lambda: fired.append(True))
     bridge.poll()
     bridge.poll()
-    assert fired == []  # 0.0 → 0.0: sin cambio, sin señal
+    assert fired == []  # 0.0 → 0.0: unchanged, so no signal
     engine.last_peak = 0.3
     bridge.poll()
     assert len(fired) == 1

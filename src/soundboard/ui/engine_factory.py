@@ -21,7 +21,11 @@ from soundboard.ui.layout_store import GridLayout
 
 
 class Engine(Protocol):
-    """Union of what `GridModel` and `EngineBridge` each need from the engine."""
+    """Union of what `GridModel` and `EngineBridge` each need from the engine.
+
+    The wide one: `grid_model.Engine` is the narrow playback-only view of the same
+    object. A real `AudioEngine` satisfies both.
+    """
 
     def play(
         self,
@@ -54,8 +58,7 @@ class Store(Protocol):
 def build_engine(backend: AudioBackend, layout: GridLayout) -> AudioEngine:
     """Default `engine_factory`: resolve devices and start the engine.
 
-    Ported from `app.py::_start_engine_with_retry`, but with the dialog retry loop
-    removed — one attempt; the caller (`AppController`) turns a failure into
+    One attempt, no retry loop: the caller (`AppController`) turns a failure into
     `setupError` and keeps the view on "setup" so QML can offer its own retry via
     `apply_devices`.
     """

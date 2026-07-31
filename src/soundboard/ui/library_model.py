@@ -40,6 +40,11 @@ class LibraryModel(QAbstractListModel):
 
     @Slot()
     def reload(self) -> None:
+        if self._loading:
+            # Reopening the popup while "Reintentar" is still in flight would race two
+            # fetches: the first to land clears the spinner and the slower one then
+            # overwrites the rows the user is already looking at.
+            return
         self._loading = True
         self.loadingChanged.emit()
         self._error = ""
@@ -95,7 +100,10 @@ class LibraryModel(QAbstractListModel):
         index: QModelIndex | QPersistentModelIndex,
         role: int = int(Qt.ItemDataRole.DisplayRole),
     ) -> str | None:
-        sound_id, name, owner = self._rows[index.row()]
+        row = index.row()
+        if not 0 <= row < len(self._rows):
+            return None
+        sound_id, name, owner = self._rows[row]
         if role == self.NAME_ROLE:
             return name
         if role == self.OWNER_ROLE:
