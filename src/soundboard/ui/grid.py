@@ -6,7 +6,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QGridLayout, QMenu, QWidget
 
-from soundboard.ui.clip_button import ClipButton
+from soundboard.ui.clip_button import ClipButton, ClipState
 
 
 class ClipGrid(QWidget):
@@ -14,6 +14,7 @@ class ClipGrid(QWidget):
     file_dropped = Signal(int, str)
     assign_shortcut_requested = Signal(int)
     clear_requested = Signal(int)
+    assign_from_library_requested = Signal(int)
 
     def __init__(self, rows: int, cols: int, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -36,8 +37,13 @@ class ClipGrid(QWidget):
         menu = QMenu(self)
         assign_action = menu.addAction("Asignar atajo")
         clear_action = menu.addAction("Vaciar celda")
+        library_action = None
+        if self.button_at(index).state is ClipState.EMPTY:
+            library_action = menu.addAction("Asignar desde biblioteca")
         chosen = menu.exec(QCursor.pos())
         if chosen is assign_action:
             self.assign_shortcut_requested.emit(index)
         elif chosen is clear_action:
             self.clear_requested.emit(index)
+        elif library_action is not None and chosen is library_action:
+            self.assign_from_library_requested.emit(index)
