@@ -83,6 +83,21 @@ Layered, with the real-time audio core kept isolated from anything that does I/O
     On Windows the same module registers the PySide6 package directory via
     `os.add_dll_directory` before any engine is built, or the QML plugin DLLs fail to
     resolve their sibling Qt DLLs.
+- **`updater/`** — the self-updater. `feed.py` is the seam (`ReleaseFeed` protocol,
+  `HttpReleaseFeed` real / `FakeReleaseFeed` in-memory), reading `SHA256SUMS` +
+  `SHA256SUMS.sig` through GitHub's `releases/latest/download/` redirect rather than the
+  API: the version then sits inside the signed payload, there is no rate limit, and a
+  release whose binaries are still building simply has no manifest yet (the CI `sign` job
+  `needs` both builds). `signature.py` verifies Ed25519 against the key hardcoded in
+  `keys.py` — hardcoded, not baked like `_baked_defaults.py`, so whoever controls CI
+  secrets cannot swap it. The signature covers the manifest, and the manifest's SHA-256
+  covers the binary, which keeps memory flat for a ~100MB asset. `install.py` swaps the
+  running binary by renaming the old one aside first and the new one in second: Windows
+  lets a running `.exe` be renamed but not deleted, so `os.replace()` onto it would fail.
+  `locate.py` returns `None` outside a frozen build, which is the single switch that
+  disables the feature for a checkout or a pip install; under an AppImage it returns
+  `$APPIMAGE`, never `sys.executable` (that points inside the FUSE mount).
+  `packaging/sign_release.py` is the producer side and is tested against this parser.
 - **`hotkeys.py`** (top-level, not under `ui/`) — global keyboard shortcuts behind a
   `HotkeyManager` protocol: `PynputHotkeyManager` (real) / `FakeHotkeyManager` (tests, no OS
   hook). Only module that imports `pynput`.
@@ -91,8 +106,10 @@ Layered, with the real-time audio core kept isolated from anything that does I/O
   never pulls in PySide6.
 
 Dependency direction: nothing under `audio/` may import `ui/`, `hotkeys.py`, `remote/`,
-PySide6, or `pynput`. `ui/` and `hotkeys.py` may import `audio/`, `remote/`, `library/`.
-`ui/` is the only importer of PySide6; `hotkeys.py` is the only importer of `pynput`.
+PySide6, or `pynput`. `ui/` and `hotkeys.py` may import `audio/`, `remote/`, `library/`,
+`updater/`. `updater/` imports none of the others (it duplicates the `settings.json` path
+helper rather than reach into `remote/`). `ui/` is the only importer of PySide6;
+`hotkeys.py` is the only importer of `pynput`.
 
 ## Project conventions
 
@@ -107,7 +124,11 @@ PySide6, or `pynput`. `ui/` and `hotkeys.py` may import `audio/`, `remote/`, `li
   `session_actions.py` out of `controller.py`, for this reason).
 - No silent failures — every error path is visible (a re-raised exception with a clear
   message, a toast in the GUI, a `QMessageBox` for the two fatal boot paths), never a
-  swallowed exception or a default that masks the problem.
+  swallowed exception or a default that masks the problem. Two deliberate exceptions,
+  both commented where they live: `updater.install.sweep_stale` (a leftover that can't be
+  deleted is retried next launch — nothing the user can act on) and the launch-time
+  update check, which stays quiet on network failure while the manual check reports
+  everything.
 - Strict TDD: failing test first, minimal implementation, confirm it passes. For
   non-trivial features, agree on the design and a step-by-step plan before writing code —
   keep both out of the repo (the checkout carries code, tests and the README, nothing
@@ -138,4 +159,12 @@ PySide6, or `pynput`. `ui/` and `hotkeys.py` may import `audio/`, `remote/`, `li
   via `os.add_dll_directory` so the QML plugin DLLs resolve.
 - Every layer with a real external dependency sits behind a protocol with an in-memory
   double for tests: `AudioBackend`/`FakeBackend`, `RemoteClient`/`FakeRemoteClient`,
-  `HotkeyManager`/`FakeHotkeyManager`.
+  `HotkeyManager`/`FakeHotkeyManager`, `ReleaseFeed`/`FakeReleaseFeed`. The HTTP paths in
+  `updater/` are covered against `httpx.MockTransport`, so the real client code runs
+  without a network.
+- The updater's swap cannot be tested automatically — it needs a real frozen build. After
+  changing anything under `updater/`, smoke-test on both platforms: rename over a live
+  `.exe`, replace a mounted AppImage, restart into the new build, confirm the `.old` is
+  swept on the next launch, and verify a genuine CI signature. `SOUNDBOARD_UPDATE_SIGNING_KEY`
+  is a repository secret; its public half is hardcoded in `updater/keys.py`, and
+  `packaging/sign_release.py --secret-key` prints the constant for a rotated key.

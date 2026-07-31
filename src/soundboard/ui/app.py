@@ -21,6 +21,8 @@ from soundboard.ui.controller import AppController
 from soundboard.ui.engine_factory import Store
 from soundboard.ui.layout_store import default_layout_path
 from soundboard.ui.tray import TrayIcon
+from soundboard.updater.locate import installed_binary
+from soundboard.updater.service import sweep_stale
 
 if sys.platform == "win32":
     # PySide6 adds its own package directory to PATH in PySide6/__init__.py, but on
@@ -62,6 +64,12 @@ def run_gui(
     exec_app: bool = True,
 ) -> int:
     app = QApplication.instance() or QApplication(argv if argv is not None else sys.argv)
+
+    # The build a previous update replaced can only be deleted once nothing is running
+    # it, which is now. Returns None outside a packaged build, where there is nothing to
+    # sweep.
+    if (binary := installed_binary()) is not None:
+        sweep_stale(binary)
 
     if client is None:
         try:

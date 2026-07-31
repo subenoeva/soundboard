@@ -32,7 +32,8 @@ def _instantiate(name: str) -> tuple[QQmlComponent, QObject]:
 def test_components_exist() -> None:
     names = {p.name for p in COMPONENTS}
     assert {"ClipPad.qml", "HeaderBar.qml", "VUMeter.qml", "Toast.qml",
-            "LibraryPopup.qml", "ShortcutPopup.qml", "ColorPopup.qml"} <= names
+            "LibraryPopup.qml", "ShortcutPopup.qml", "ColorPopup.qml",
+            "UpdateBanner.qml"} <= names
 
 
 def test_views_exist() -> None:
@@ -68,6 +69,70 @@ def test_clip_pad_pulses_when_it_starts_playing(qapp: object) -> None:
     pad.setProperty("cellState", "playing")
 
     assert pulse.property("running") is True
+
+
+def test_update_banner_takes_no_room_until_there_is_an_update(qapp: object) -> None:
+    """`visible` is effective visibility and stays False without a window, so the height
+    collapse is what this asserts — and it is what actually keeps the grid full-size."""
+    _component, banner = _instantiate("UpdateBanner.qml")
+
+    assert banner.property("showing") is False
+    assert banner.property("height") == 0
+
+    banner.setProperty("updateState", "available")
+
+    assert banner.property("showing") is True
+    assert banner.property("height") > 0
+
+    banner.setProperty("updateState", "idle")
+
+    assert banner.property("height") == 0
+
+
+def test_update_banner_offers_a_restart_once_the_swap_is_done(qapp: object) -> None:
+    _component, banner = _instantiate("UpdateBanner.qml")
+    banner.setProperty("version", "0.4.0")
+    action = banner.findChild(QObject, "updateAction")
+    label = banner.findChild(QObject, "updateLabel")
+    assert action is not None and label is not None
+
+    banner.setProperty("updateState", "available")
+    assert action.property("text") == "Actualizar"
+    assert "0.4.0" in str(label.property("text"))
+
+    banner.setProperty("updateState", "downloading")
+    # Clicking again mid-download would start a second one over the same staged file.
+    assert action.property("enabled") is False
+
+    banner.setProperty("updateState", "ready")
+    assert action.property("text") == "Reiniciar ahora"
+    assert action.property("enabled") is True
+
+
+def test_update_banner_fill_tracks_progress(qapp: object) -> None:
+    _component, banner = _instantiate("UpdateBanner.qml")
+    banner.setProperty("updateState", "downloading")
+    banner.setProperty("width", 200)
+    fill = banner.findChild(QObject, "progressFill")
+    assert fill is not None
+
+    banner.setProperty("progress", 0.5)
+    assert fill.property("width") == pytest.approx(100)
+
+    banner.setProperty("updateState", "ready")
+    assert fill.property("width") == 0
+
+
+def test_header_hides_the_update_check_when_it_cannot_work(qapp: object) -> None:
+    _component, header = _instantiate("HeaderBar.qml")
+    button = header.findChild(QObject, "checkUpdatesButton")
+    assert button is not None
+
+    assert button.property("visible") is False
+
+    header.setProperty("canCheckForUpdates", True)
+
+    assert button.property("visible") is True
 
 
 def test_clip_pad_wraps_the_shortcut_in_a_badge(qapp: object) -> None:

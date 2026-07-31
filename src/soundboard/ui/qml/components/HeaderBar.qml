@@ -9,9 +9,13 @@ Rectangle {
     property string userEmail: ""
     property string micName: ""
     property string outName: ""
+    // False for a source checkout or a pip install, where there is no single file to
+    // replace — the entry is hidden rather than offering an action that can only fail.
+    property bool canCheckForUpdates: false
     signal settingsClicked()
     signal stopAllClicked()
     signal logOutClicked()
+    signal checkForUpdatesClicked()
 
     height: 48
     color: Theme.surface
@@ -45,6 +49,13 @@ Rectangle {
                 color: Theme.textSecondary
                 font.pixelSize: 11
             }
+        }
+
+        Button {
+            objectName: "checkUpdatesButton"
+            text: "Buscar actualizaciones"
+            visible: root.canCheckForUpdates
+            onClicked: root.checkForUpdatesClicked()
         }
 
         Button {
