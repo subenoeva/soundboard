@@ -3,19 +3,29 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
+import soundfile as sf
 
 from soundboard.hotkeys import FakeHotkeyManager
 from soundboard.library.cache import SoundCache
+from soundboard.remote import sounds
 from soundboard.remote.fake_client import FakeRemoteClient
 from soundboard.ui.grid_model import (
     STATE_EMPTY,
     STATE_IDLE,
+    STATE_LOADING,
+    STATE_PLAYING,
     GridModel,
 )
-from soundboard.ui.layout_store import Cell, GridLayout, LocalSource
+from soundboard.ui.layout_store import Cell, GridLayout, LocalSource, RemoteSource
+
+
+def make_wav(path: Path) -> Path:
+    sf.write(str(path), np.full(480, 0.5, dtype=np.float32), 48_000)
+    return path
 
 
 class FakeEngine:
@@ -87,3 +97,96 @@ def test_saved_shortcuts_are_registered_at_init(
     cell = Cell(index=0, source=LocalSource(path="a.wav"), name="a", shortcut="<ctrl>+1")
     _model, _, _ = make_model(tmp_path, hotkeys, cells=[cell])
     hotkeys.trigger("<ctrl>+1")  # no debe lanzar KeyError
+
+
+def test_play_local_cell_plays_and_tracks_voice(
+    tmp_path: Path, hotkeys: FakeHotkeyManager, qtbot: object
+) -> None:
+    wav = make_wav(tmp_path / "a.wav")
+    cell = Cell(index=0, source=LocalSource(path=str(wav)), name="a")
+    model, engine, _ = make_model(tmp_path, hotkeys, cells=[cell])
+    model.play(0)
+    assert len(engine.played) == 1
+    assert model.data(model.index(0), GridModel.STATE_ROLE) == STATE_PLAYING
+
+
+def test_play_empty_cell_is_noop(tmp_path: Path, hotkeys: FakeHotkeyManager) -> None:
+    model, engine, _ = make_model(tmp_path, hotkeys)
+    model.play(0)
+    assert engine.played == []
+
+
+def test_play_unreadable_local_file_toasts(
+    tmp_path: Path, hotkeys: FakeHotkeyManager, qtbot: object
+) -> None:
+    cell = Cell(index=0, source=LocalSource(path=str(tmp_path / "missing.wav")), name="x")
+    model, engine, _ = make_model(tmp_path, hotkeys, cells=[cell])
+    messages: list[str] = []
+    model.toast.connect(messages.append)
+    model.play(0)
+    assert engine.played == []
+    assert messages
+
+
+def test_apply_voice_states_updates_progress_and_clears_on_end(
+    tmp_path: Path, hotkeys: FakeHotkeyManager
+) -> None:
+    wav = make_wav(tmp_path / "a.wav")
+    cell = Cell(index=0, source=LocalSource(path=str(wav)), name="a")
+    model, _engine, _ = make_model(tmp_path, hotkeys, cells=[cell])
+    model.play(0)  # FakeEngine devuelve voice_id 1
+    model.apply_voice_states([(1, 0.4)])
+    assert model.data(model.index(0), GridModel.PROGRESS_ROLE) == pytest.approx(0.4)
+    model.apply_voice_states([])
+    assert model.data(model.index(0), GridModel.STATE_ROLE) == STATE_IDLE
+    assert model.data(model.index(0), GridModel.PROGRESS_ROLE) == 0.0
+
+
+def test_play_remote_cell_loads_then_plays(
+    tmp_path: Path, hotkeys: FakeHotkeyManager, qtbot: Any
+) -> None:
+    client = FakeRemoteClient()
+    session = client.sign_in_as_new_user("user@example.com")
+    wav = make_wav(tmp_path / "a.wav")
+    sound = sounds.add_sound(client, session, str(wav), name="laugh")
+    engine = FakeEngine()
+    layout = GridLayout(
+        rows=1, cols=1, mic="m", out="o", blocksize=256,
+        cells=[Cell(index=0, source=RemoteSource(id=sound.id), name="laugh")],
+    )
+    model = GridModel(
+        engine, client, session, SoundCache(tmp_path / "cache"), hotkeys, layout,
+        tmp_path / "layout.json",
+    )
+
+    model.play(0)
+
+    assert model.data(model.index(0), GridModel.STATE_ROLE) == STATE_LOADING
+    qtbot.waitUntil(lambda: len(engine.played) == 1, timeout=2000)
+    assert model.data(model.index(0), GridModel.STATE_ROLE) == STATE_PLAYING
+
+
+def test_play_remote_cell_download_failure_resets_to_idle_and_toasts(
+    tmp_path: Path, hotkeys: FakeHotkeyManager, qtbot: Any
+) -> None:
+    client = FakeRemoteClient()
+    session = client.sign_in_as_new_user("user@example.com")
+    engine = FakeEngine()
+    layout = GridLayout(
+        rows=1, cols=1, mic="m", out="o", blocksize=256,
+        cells=[Cell(index=0, source=RemoteSource(id="missing-id"), name="ghost")],
+    )
+    model = GridModel(
+        engine, client, session, SoundCache(tmp_path / "cache"), hotkeys, layout,
+        tmp_path / "layout.json",
+    )
+    messages: list[str] = []
+    model.toast.connect(messages.append)
+
+    model.play(0)
+
+    qtbot.waitUntil(
+        lambda: model.data(model.index(0), GridModel.STATE_ROLE) == STATE_IDLE, timeout=2000
+    )
+    assert engine.played == []
+    assert messages
