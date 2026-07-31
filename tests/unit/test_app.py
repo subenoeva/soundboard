@@ -82,6 +82,37 @@ def test_run_gui_reports_an_unbuildable_client_instead_of_crashing(
     assert shown == ["SUPABASE_URL no configurada"]
 
 
+def test_run_gui_falls_back_to_login_when_the_stored_session_fails_to_restore(
+    qtbot: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refresh token consumed by a previous run (Supabase rotates it on every use)
+    makes the SDK's restore_session raise. That must fall back to the login dialog
+    instead of crashing the whole app before any window opens."""
+
+    client = FakeRemoteClient()
+    session = client.sign_in_as_new_user("a@x.com")
+
+    def _raise(self: object, session: object) -> None:
+        raise RuntimeError("Invalid Refresh Token: Already Used")
+
+    monkeypatch.setattr(FakeRemoteClient, "restore_session", _raise)
+
+    store = SessionStore(backend=_DictKeyringBackend())
+    store.save(session)
+    monkeypatch.setattr(LoginDialog, "exec", lambda self: QDialog.DialogCode.Rejected)
+
+    exit_code = run_gui(
+        client=client,
+        store=store,
+        backend=FakeBackend(),
+        hotkeys=FakeHotkeyManager(),
+        exec_app=False,
+    )
+
+    assert exit_code == 1
+    assert store.load() is None
+
+
 def test_run_gui_happy_path_with_existing_session_and_layout(
     qtbot: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

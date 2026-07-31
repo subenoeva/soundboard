@@ -16,7 +16,7 @@ from soundboard.hotkeys import HotkeyManager, PynputHotkeyManager
 from soundboard.library.cache import SoundCache
 from soundboard.remote import auth
 from soundboard.remote.client import SessionStore, build_client
-from soundboard.remote.models import RemoteClient
+from soundboard.remote.models import RemoteClient, Session
 from soundboard.ui.device_dialog import DeviceSettingsDialog
 from soundboard.ui.layout_store import GridLayout, default_layout_path, load_layout, save_layout
 from soundboard.ui.login_dialog import LoginDialog
@@ -90,14 +90,29 @@ def run_gui(
     backend = backend if backend is not None else PortAudioBackend()
     hotkeys = hotkeys if hotkeys is not None else PynputHotkeyManager()
 
-    if store.load() is None:
+    session: Session | None = None
+    session_needs_login = store.load() is None
+    if not session_needs_login:
+        try:
+            session = auth.require_session(client, store)
+        except Exception:
+            # Supabase rotates the refresh token on every use. A token saved by a
+            # previous run that already got consumed elsewhere (or never made it to
+            # a second write) makes the SDK's own refresh call raise before any
+            # window opens, crashing straight to a traceback. Treat that the same
+            # as "logged out" instead: drop the stale session and let LoginDialog
+            # get a fresh one.
+            store.clear()
+            session_needs_login = True
+
+    if session_needs_login:
         login = LoginDialog(client, store)
         if login.exec() != QDialog.DialogCode.Accepted:
             return 1
         assert login.session is not None
         session = login.session
-    else:
-        session = auth.require_session(client, store)
+
+    assert session is not None
 
     layout_path = default_layout_path()
     layout = load_layout(layout_path)
