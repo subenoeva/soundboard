@@ -12,6 +12,7 @@ Item {
         outName: App.outName
         onSettingsClicked: App.open_settings()
         onStopAllClicked: App.stop_all()
+        onLogOutClicked: App.log_out()
     }
 
     GridView {

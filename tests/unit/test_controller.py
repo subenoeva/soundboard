@@ -12,10 +12,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+import pytest
+
 from soundboard.audio.fake_backend import FakeBackend
 from soundboard.hotkeys import FakeHotkeyManager
 from soundboard.library.cache import SoundCache
 from soundboard.remote.fake_client import FakeRemoteClient
+from soundboard.remote.models import Session
 from soundboard.ui.controller import AppController
 from soundboard.ui.grid_model import GridModel
 from soundboard.ui.layout_store import Cell, GridLayout, LocalSource, load_layout, save_layout
@@ -23,12 +26,12 @@ from soundboard.ui.layout_store import Cell, GridLayout, LocalSource, load_layou
 
 class FakeStore:
     def __init__(self) -> None:
-        self._session = None
+        self._session: Session | None = None
 
-    def load(self):  # type: ignore[no-untyped-def]
+    def load(self) -> Session | None:
         return self._session
 
-    def save(self, session) -> None:  # type: ignore[no-untyped-def]
+    def save(self, session: Session) -> None:
         self._session = session
 
     def clear(self) -> None:
@@ -64,12 +67,14 @@ def make_controller(
     *,
     engine_factory: Callable[[GridLayout], FakeEngine] | None = None,
     store: FakeStore | None = None,
+    client: FakeRemoteClient | None = None,
+    hotkeys: FakeHotkeyManager | None = None,
 ) -> tuple[AppController, FakeRemoteClient, FakeStore]:
-    client = FakeRemoteClient()
+    client = client or FakeRemoteClient()
     store = store or FakeStore()
     controller = AppController(
         client=client, store=store, backend=FakeBackend(),
-        hotkeys=FakeHotkeyManager(), cache=SoundCache(tmp_path / "cache"),
+        hotkeys=hotkeys or FakeHotkeyManager(), cache=SoundCache(tmp_path / "cache"),
         layout_path=tmp_path / "layout.json",
         engine_factory=engine_factory or (lambda layout: FakeEngine()),
     )
@@ -225,3 +230,67 @@ def test_a_cell_left_over_from_a_bigger_grid_is_dropped_on_the_next_change(
     saved = load_layout(tmp_path / "layout.json")
     assert saved is not None
     assert saved.cells == []
+
+
+def test_log_out_retires_the_engine_stack_and_returns_to_login(
+    tmp_path: Path, qtbot: object
+) -> None:
+    engines: list[FakeEngine] = []
+
+    def factory(layout):  # type: ignore[no-untyped-def]
+        engines.append(FakeEngine())
+        return engines[-1]
+
+    hotkeys = FakeHotkeyManager()
+    controller, client, store = make_controller(
+        tmp_path, engine_factory=factory, hotkeys=hotkeys
+    )
+    client.sign_up("user@example.com", "password")
+    controller.bootstrap()
+    controller.log_in("user@example.com", "password")
+    controller.apply_devices("mic", "out", 2, 3)
+    grid = controller.gridModel
+    assert isinstance(grid, GridModel)
+    grid.assign_remote(0, "sound-id-1", "airhorn")
+    grid.set_shortcut(0, "<ctrl>+1")
+
+    controller.log_out()
+
+    assert controller.view == "login"  # type: ignore[comparison-overlap]
+    assert controller.userEmail == ""  # type: ignore[comparison-overlap]
+    assert store.load() is None
+    assert controller.gridModel is None
+    assert controller.bridge is None
+    assert engines[-1].stopped
+    # A global hotkey surviving the session would play into a dead engine, from a
+    # board the user can no longer see to unbind it.
+    with pytest.raises(KeyError):
+        hotkeys.trigger("<ctrl>+1")
+    # The grid belongs to the machine, not to the session: signing back in has to
+    # find the same pads.
+    assert load_layout(tmp_path / "layout.json") is not None
+
+
+def test_log_out_drops_the_local_session_even_if_the_server_call_fails(
+    tmp_path: Path, qtbot: object
+) -> None:
+    class OfflineClient(FakeRemoteClient):
+        def sign_out(self) -> None:
+            raise RuntimeError("connection refused")
+
+    client = OfflineClient()
+    client.sign_up("user@example.com", "password")
+    controller, _, store = make_controller(tmp_path, client=client)
+    controller.bootstrap()
+    controller.log_in("user@example.com", "password")
+    messages: list[str] = []
+    controller.toast.connect(messages.append)
+
+    controller.log_out()
+
+    # Keeping the session on disk because the server was unreachable would sign the
+    # user straight back in on the next start — the one thing logout must prevent.
+    assert store.load() is None
+    assert controller.view == "login"  # type: ignore[comparison-overlap]
+    assert len(messages) == 1
+    assert "connection refused" in messages[0]

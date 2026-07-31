@@ -19,6 +19,7 @@ from soundboard.hotkeys import HotkeyManager
 from soundboard.library.cache import SoundCache
 from soundboard.remote import auth
 from soundboard.remote.models import RemoteClient, Session
+from soundboard.ui import session_actions
 from soundboard.ui.engine_bridge import EngineBridge
 from soundboard.ui.engine_factory import Engine, Store, build_engine
 from soundboard.ui.grid_model import GridModel
@@ -80,20 +81,7 @@ class AppController(QObject):
     # -- lifecycle ------------------------------------------------------------
 
     def bootstrap(self) -> None:
-        if self._store.load() is not None:
-            try:
-                # auth.require_session is typed against the concrete SessionStore,
-                # not the Store protocol self._store is declared with; it is
-                # structurally compatible (SessionStore itself, or the tests'
-                # duck-typed double).
-                self._session = auth.require_session(
-                    self._client, self._store  # type: ignore[arg-type]
-                )
-            except Exception:
-                # Supabase rotates the refresh token; a token already consumed must
-                # be treated as "no session", not as a crash (same reasoning as
-                # app.py used to document).
-                self._store.clear()
+        self._session = session_actions.restore(self._client, self._store)
         if self._session is None:
             self._set_view("login")
             return
@@ -116,10 +104,7 @@ class AppController(QObject):
     @Slot(str, str)
     def log_in(self, email: str, password: str) -> None:
         try:
-            self._session = auth.log_in(
-                self._client, self._store,  # type: ignore[arg-type]
-                email, password, lambda: email.split("@")[0],
-            )
+            self._session = session_actions.start(self._client, self._store, email, password)
         except Exception as exc:
             self._login_error = str(exc)
             self.loginErrorChanged.emit()
@@ -139,6 +124,21 @@ class AppController(QObject):
         self._login_error = ""
         self.loginErrorChanged.emit()
         self.toast.emit("Cuenta creada — confirma el email antes de ingresar")
+
+    @Slot()
+    def log_out(self) -> None:
+        """Retire the engine stack, forget the session, and go back to the login view.
+
+        `layout.json` is left on disk on purpose: the grid belongs to the machine and
+        its team, not to whoever is signed in, so the next login finds the same pads.
+        """
+        self._teardown_engine()
+        if (error := session_actions.discard(self._client, self._store)) is not None:
+            self.toast.emit(f"No se pudo cerrar la sesión en el servidor: {error}")
+        self._session, self._layout = None, None
+        self.sessionChanged.emit()
+        self.devicesChanged.emit()
+        self._set_view("login")
 
     @Slot(str, str, int, int)
     def apply_devices(self, mic: str, out: str, rows: int, cols: int) -> None:

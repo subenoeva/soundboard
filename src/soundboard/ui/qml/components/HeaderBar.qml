@@ -5,11 +5,13 @@ import ".."
 
 Rectangle {
     id: root
+    objectName: "headerBar"
     property string userEmail: ""
     property string micName: ""
     property string outName: ""
     signal settingsClicked()
     signal stopAllClicked()
+    signal logOutClicked()
 
     height: 48
     color: Theme.surface
@@ -48,6 +50,11 @@ Rectangle {
         Button {
             text: "Ajustes"
             onClicked: root.settingsClicked()
+        }
+
+        Button {
+            text: "Cerrar sesión"
+            onClicked: root.logOutClicked()
         }
 
         Button {

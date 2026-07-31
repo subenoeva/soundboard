@@ -68,6 +68,10 @@ Layered, with the real-time audio core kept isolated from anything that does I/O
   retired while the work was in flight.
   - Python↔QML boundary: properties exposed to QML are camelCase (`userEmail`,
     `metricsText`), slots are snake_case and QML calls them as-is (`App.log_in(...)`).
+  - `log_out()` retires the engine stack through the same `_teardown_engine()` a device
+    change uses: an engine, a poll timer or a global hotkey outliving the session is the
+    bug that helper exists to prevent. `layout.json` deliberately survives a logout —
+    the grid belongs to the machine and its team, not to whoever is signed in.
   - Model role names avoid QML's own property names: `cellState` (not `state`, which
     collides with `Item.state`) and `cellColor` (not `color`, which collides with
     `Rectangle.color`).
@@ -99,8 +103,8 @@ PySide6, or `pynput`. `ui/` and `hotkeys.py` may import `audio/`, `remote/`, `li
   Claude Code" footer, no emoji robot signature. Commits and PRs read as if written by the
   human author, full stop.
 - Soft limit of ~300 lines per file — split when a change would push a file past that
-  (e.g. `_worker_dispatch.py` is split out of `grid_model.py`, and `engine_factory.py` out
-  of `controller.py`, for this reason).
+  (e.g. `_worker_dispatch.py` is split out of `grid_model.py`, and `engine_factory.py` and
+  `session_actions.py` out of `controller.py`, for this reason).
 - No silent failures — every error path is visible (a re-raised exception with a clear
   message, a toast in the GUI, a `QMessageBox` for the two fatal boot paths), never a
   swallowed exception or a default that masks the problem.
