@@ -54,15 +54,31 @@ Layered, with the real-time audio core kept isolated from anything that does I/O
 - **`library/`** — `importer.py` decodes a new upload, hashes it (dedup key) and measures
   the gain that would bring its peak to the limiter ceiling; `cache.py` caches downloaded
   remote PCM on disk, keyed by sha256.
-- **`ui/`** — the PySide6 desktop GUI; the only package that imports Qt. `main_window.py`
-  wires `grid.py` (the clip grid) + `tray.py` + `hotkeys.py` to `AudioEngine` and `remote`.
+- **`ui/`** — the Qt Quick desktop GUI; the only package that imports Qt. `app.py` builds
+  an `AppController` (`controller.py`), exposes it to QML as the `App` context property and
+  loads `qml/Main.qml`. The controller owns the session, the engine lifecycle and the view
+  the window shows; the QML is a dumb view over three testable models — `GridModel`
+  (the clip grid), `EngineBridge` (polls peak/metrics/voice progress at ~30 Hz),
+  `LibraryModel` (the remote library). All three are exercised headless, without rendering.
   Anything that can block (downloading a remote sound, uploading a dropped file) runs on a
   `QRunnable` (`download_worker.py`, `upload_worker.py`) with `finished`/`failed` signals —
   never on the Qt thread, and kept alive in a `self._active_*` set until its signal fires
-  (`QThreadPool` doesn't keep Python's refcount alive across the thread hop). Dialogs that
-  would otherwise need a real Qt modal in tests take an injectable callable
-  (`message_box`, `prompt_shortcut`, `pick_library_sound`) with a real default and a fake
-  swapped in under test.
+  (`QThreadPool` doesn't keep Python's refcount alive across the thread hop); see
+  `_worker_dispatch.py`, whose `is_live` check drops results belonging to a model that was
+  retired while the work was in flight.
+  - Python↔QML boundary: properties exposed to QML are camelCase (`userEmail`,
+    `metricsText`), slots are snake_case and QML calls them as-is (`App.log_in(...)`).
+  - Model role names avoid QML's own property names: `cellState` (not `state`, which
+    collides with `Item.state`) and `cellColor` (not `color`, which collides with
+    `Rectangle.color`).
+  - Components under `qml/components/` use `property` with defaults, never
+    `required property`, and never reference `App` — that is what lets the smoke test
+    instantiate each one standalone with no context.
+  - `qml_root()` in `app.py` resolves `qml/` in a checkout and under PyInstaller via
+    `sys._MEIPASS`; the packaging specs must bundle the tree at `soundboard/ui/qml`.
+    On Windows the same module registers the PySide6 package directory via
+    `os.add_dll_directory` before any engine is built, or the QML plugin DLLs fail to
+    resolve their sibling Qt DLLs.
 - **`hotkeys.py`** (top-level, not under `ui/`) — global keyboard shortcuts behind a
   `HotkeyManager` protocol: `PynputHotkeyManager` (real) / `FakeHotkeyManager` (tests, no OS
   hook). Only module that imports `pynput`.
@@ -83,10 +99,11 @@ PySide6, or `pynput`. `ui/` and `hotkeys.py` may import `audio/`, `remote/`, `li
   Claude Code" footer, no emoji robot signature. Commits and PRs read as if written by the
   human author, full stop.
 - Soft limit of ~300 lines per file — split when a change would push a file past that
-  (e.g. `clip_button.py` is split out of `grid.py` for this reason).
+  (e.g. `_worker_dispatch.py` is split out of `grid_model.py`, and `engine_factory.py` out
+  of `controller.py`, for this reason).
 - No silent failures — every error path is visible (a re-raised exception with a clear
-  message, a `QMessageBox`, a status-bar message), never a swallowed exception or a default
-  that masks the problem.
+  message, a toast in the GUI, a `QMessageBox` for the two fatal boot paths), never a
+  swallowed exception or a default that masks the problem.
 - Strict TDD: failing test first, minimal implementation, confirm it passes. Non-trivial
   features get a design spec at `docs/superpowers/specs/YYYY-MM-DD-<name>-design.md`
   (approved before planning) broken down into a step-by-step, bite-sized TDD plan at
