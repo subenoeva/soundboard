@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/subenoeva/soundboard/compare/v0.2.2...v0.3.0) (2026-07-31)
+
+
+### Features
+
+* **ui:** rebuild the desktop GUI on Qt Quick ([608baa6](https://github.com/subenoeva/soundboard/commit/608baa68d9b2479b31beafc339abe05640c1a9bd))
+
 ## [0.2.2](https://github.com/subenoeva/soundboard/compare/v0.2.1...v0.2.2) (2026-07-31)
 
 
