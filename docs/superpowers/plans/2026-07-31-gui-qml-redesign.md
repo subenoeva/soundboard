@@ -31,7 +31,7 @@
 **Interfaces:**
 - Produces: `Voice(pcm, gain=1.0, loop=False, start=0, end=None, voice_id=0)`; atributo `voice_id: int`; propiedad `progress: float` (0..1 dentro del rango `start..end`; `1.0` si `finished`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Añadir a `tests/unit/test_voice.py`:
 
@@ -69,12 +69,12 @@ def test_progress_is_one_for_empty_range() -> None:
     assert voice.progress == 1.0
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/unit/test_voice.py -v`
 Expected: FAIL — `TypeError: ... unexpected keyword argument 'voice_id'` / `AttributeError: 'Voice' object has no attribute 'progress'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 En `Voice.__init__`, añadir el parámetro y atributo `voice_id: int = 0` (después de `end`), y la propiedad:
 
@@ -90,12 +90,12 @@ En `Voice.__init__`, añadir el parámetro y atributo `voice_id: int = 0` (despu
 
 Nota: con `loop=True` la posición vuelve a `start` al terminar el ciclo, así que `progress` cicla 0→1 — comportamiento deseado para la barra de la celda.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/unit/test_voice.py -v && uv run ruff check . && uv run mypy`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/soundboard/audio/voice.py tests/unit/test_voice.py
@@ -114,7 +114,7 @@ git commit -m "feat(audio): add voice_id and progress to Voice"
 - Consumes: `Voice.voice_id`, `Voice.progress` (Task 1).
 - Produces: `Mixer.voice_states() -> list[tuple[int, float]]` (pares `(voice_id, progress)` de voces no terminadas); atributo `Mixer.last_peak: float` (pico absoluto del último bloque de salida, tras el limiter).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Añadir a `tests/unit/test_mixer.py`:
 
@@ -151,12 +151,12 @@ def test_last_peak_tracks_output_block() -> None:
     assert mixer.last_peak > 0.0
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/unit/test_mixer.py -v`
 Expected: FAIL — `AttributeError: 'Mixer' object has no attribute 'voice_states'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 En `Mixer.__init__` añadir `self.last_peak: float = 0.0`. Al final de `process()` (tras el último `np.multiply`):
 
@@ -177,12 +177,12 @@ Y el método (fuera de la ruta RT — lo llama el hilo de UI):
         return [(v.voice_id, v.progress) for v in list(self._voices) if not v.finished]
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/unit/test_mixer.py -v && uv run ruff check . && uv run mypy`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/soundboard/audio/mixer.py tests/unit/test_mixer.py
@@ -201,7 +201,7 @@ git commit -m "feat(audio): expose per-voice progress and output peak from Mixer
 - Consumes: `Voice(..., voice_id=...)` (Task 1), `Mixer.voice_states()` / `Mixer.last_peak` (Task 2).
 - Produces: `AudioEngine.play(pcm, *, gain=1.0, loop=False, start=0, end=None) -> int`; `AudioEngine.voice_states() -> list[tuple[int, float]]`; propiedad `AudioEngine.last_peak: float`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Crear `tests/unit/test_engine_voices.py`:
 
@@ -247,12 +247,12 @@ def test_voice_states_and_peak_after_processing() -> None:
 
 **Nota:** revisar `src/soundboard/audio/fake_backend.py` para el método real que dispara callbacks (`advance_blocks`, `step`, o similar — usar el que ya usan `tests/unit/test_fake_backend.py`). Ajustar el nombre en el test; el resto no cambia.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/unit/test_engine_voices.py -v`
 Expected: FAIL — `play()` devuelve `None`, `AudioEngine` no tiene `voice_states`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 En `engine.py`: `import itertools`; en `__init__` añadir `self._voice_ids = itertools.count(1)`. Cambiar `play`:
 
@@ -289,12 +289,12 @@ Y los delegados:
         return self._mixer.last_peak
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/unit/test_engine_voices.py tests/unit/ -v && uv run ruff check . && uv run mypy`
 Expected: PASS (toda la suite — `cli.py` y `main_window.py` ignoran el nuevo return, compatible)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/soundboard/audio/engine.py tests/unit/test_engine_voices.py
@@ -312,7 +312,7 @@ git commit -m "feat(audio): return voice ids from play and expose voice states"
 **Interfaces:**
 - Produces: `Cell(index, source, name, shortcut=None, color: str | None = None)`; round-trip JSON con `color`; JSON antiguo sin el campo carga con `color=None`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Añadir a `tests/unit/test_layout_store.py`:
 
@@ -343,21 +343,21 @@ def test_legacy_layout_without_color_loads(tmp_path: Path) -> None:
     assert loaded.cells[0].color is None
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/unit/test_layout_store.py -v`
 Expected: FAIL — `TypeError: ... unexpected keyword argument 'color'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 En `Cell` añadir `color: str | None = None`. En `_cell_to_dict` añadir `"color": cell.color`. En `_cell_from_dict` añadir `color=data.get("color")`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/unit/test_layout_store.py -v && uv run ruff check . && uv run mypy`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/soundboard/ui/layout_store.py tests/unit/test_layout_store.py
@@ -381,7 +381,7 @@ git commit -m "feat(ui): add optional per-cell color to the grid layout"
   - Roles: `NAME_ROLE`→`b"name"`, `SHORTCUT_ROLE`→`b"shortcut"`, `COLOR_ROLE`→`b"cellColor"`, `STATE_ROLE`→`b"cellState"`, `PROGRESS_ROLE`→`b"progress"`.
   - Señal `toast = Signal(str)`. Señal interna `_hotkey_pressed = Signal(int)` conectada a `play` (rebota el hilo de pynput al hilo Qt — la conexión auto se vuelve queued en emisión cross-thread).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Crear `tests/unit/test_grid_model.py`:
 
@@ -477,12 +477,12 @@ def test_saved_shortcuts_are_registered_at_init(
     hotkeys.trigger("<ctrl>+1")  # no debe lanzar KeyError
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/unit/test_grid_model.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'soundboard.ui.grid_model'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Crear `src/soundboard/ui/grid_model.py`:
 
@@ -621,12 +621,12 @@ class GridModel(QAbstractListModel):
 
 **Nota:** si ese encolado sí se ejecuta bajo pytest-qt (depende de si hay `QApplication` activa — el fixture `qtbot`/`qapp` la crea), cambiar el cuerpo de `play` a `return None` temporalmente en vez de `raise`. Decidirlo según lo que haga la suite, no dejar el test rojo.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/unit/test_grid_model.py -v && uv run ruff check . && uv run mypy`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/soundboard/ui/grid_model.py tests/unit/test_grid_model.py
@@ -645,7 +645,7 @@ git commit -m "feat(ui): add GridModel list model over the grid layout"
 - Consumes: `DownloadWorker` (existente), `sounds.get_sound` / `sounds.resolve_pcm`, `load_mono_48k`.
 - Produces: slot `play(index: int)`; método `apply_voice_states(states: list[tuple[int, float]]) -> None` (lo llama `EngineBridge`, Task 8).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Añadir a `tests/unit/test_grid_model.py` (el helper `make_wav` puede copiarse de cómo `tests/unit/test_main_window.py` genera WAVs — revisar ese archivo antes de escribirlo y reutilizar su patrón exacto):
 
@@ -695,12 +695,12 @@ def test_apply_voice_states_updates_progress_and_clears_on_end(
 
 Para el caso remoto, replicar el patrón de `test_main_window.py` para descargas (fake client con sonido subido + `qtbot.waitSignal` sobre el worker o inyección síncrona). Mínimo un test: celda remota pasa a LOADING y, al resolver, llama `engine.play` y queda PLAYING; y otro: fallo de descarga → IDLE + toast.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/unit/test_grid_model.py -v`
 Expected: FAIL — `NotImplementedError` / atributos faltantes
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Reemplazar el stub de `play` y añadir:
 
@@ -771,12 +771,12 @@ Reemplazar el stub de `play` y añadir:
 
 Imports nuevos: `QThreadPool` (QtCore), `from soundboard.audioio import load_mono_48k`, `from soundboard.remote import sounds`, `from soundboard.ui.download_worker import DownloadWorker`, `LocalSource`/`RemoteSource` de layout_store. Decorar `play` con `@Slot(int)` (import `Slot`).
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/unit/test_grid_model.py -v && uv run ruff check . && uv run mypy`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/soundboard/ui/grid_model.py tests/unit/test_grid_model.py
@@ -795,7 +795,7 @@ git commit -m "feat(ui): play cells and track voice progress in GridModel"
 - Consumes: `UploadWorker` (existente), `sounds.add_sound`.
 - Produces: slots `assign_local(index: int, path: str)` (acepta ruta o URL `file:`), `assign_remote(index: int, sound_id: str, name: str)`, `clear_cell(index: int)`, `set_shortcut(index: int, combo: str)` (`""` quita el atajo), `set_color(index: int, color: str)` (`""` quita el color).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Añadir a `tests/unit/test_grid_model.py` (para `assign_local`, replicar el patrón de subida de `test_main_window.py` con `qtbot.waitSignal`):
 
@@ -866,12 +866,12 @@ def test_set_color_persists_and_clears(
 
 Más los de `assign_local`: archivo válido → LOADING → (worker sube) → celda remota IDLE con nombre; archivo inválido → toast y sigue vacía; celda ocupada → no-op.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/unit/test_grid_model.py -v`
 Expected: FAIL — atributos faltantes
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Añadir a `GridModel` (todos `@Slot` con las firmas de Interfaces):
 
@@ -969,12 +969,12 @@ Añadir a `GridModel` (todos `@Slot` con las firmas de Interfaces):
 
 Imports nuevos: `QUrl`, `UploadWorker`, `Sound`, `save_layout`. Ojo: `set_shortcut` con combo nuevo sobre celda que ya tenía uno registra el nuevo antes de quitar el viejo (mismo orden que el código actual — si el nuevo es inválido, el viejo sobrevive).
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/unit/test_grid_model.py -v && uv run ruff check . && uv run mypy`
 Expected: PASS. Si `grid_model.py` supera ~300 líneas, extraer los workers de subida/descarga a un helper privado — pero primero medir; debería quedar ~280.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/soundboard/ui/grid_model.py tests/unit/test_grid_model.py
@@ -993,7 +993,7 @@ git commit -m "feat(ui): cell assignment, shortcuts and colors in GridModel"
 - Consumes: `engine.last_peak`, `engine.voice_states()`, `engine.metrics` (Task 3).
 - Produces: `EngineBridge(engine, parent=None, interval_ms=33)` con propiedades QML `peak: float` (notify `peakChanged`) y `metricsText: str` (notify `metricsChanged`); señal `voice_states_updated = Signal(object)` (lista de `(voice_id, progress)`); métodos `start()`, `stop()`, slot `poll()` (un tick, invocable directo en tests).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Crear `tests/unit/test_engine_bridge.py`:
 
@@ -1046,12 +1046,12 @@ def test_peak_changed_only_fires_on_change(qtbot: object) -> None:
     assert len(fired) == 1
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/unit/test_engine_bridge.py -v`
 Expected: FAIL — módulo inexistente
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Crear `src/soundboard/ui/engine_bridge.py`:
 
@@ -1120,12 +1120,12 @@ class EngineBridge(QObject):
     metricsText = Property(str, _get_metrics_text, notify=metricsChanged)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/unit/test_engine_bridge.py -v && uv run ruff check . && uv run mypy`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/soundboard/ui/engine_bridge.py tests/unit/test_engine_bridge.py
@@ -1144,7 +1144,7 @@ git commit -m "feat(ui): add EngineBridge polling peak, metrics and voice states
 - Consumes: `sounds.list_sounds`, `auth.display_names`, `DownloadWorker` (payload genérico `object`).
 - Produces: `LibraryModel(client, parent=None)` — `QAbstractListModel` con roles `NAME_ROLE`→`b"name"`, `OWNER_ROLE`→`b"owner"`, `SOUND_ID_ROLE`→`b"soundId"`; propiedades QML `loading: bool` (notify `loadingChanged`), `errorText: str` (notify `errorChanged`), `filterText: str` lectura/escritura (notify `filterChanged`; el setter re-filtra); slot `reload()`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Crear `tests/unit/test_library_model.py`. Preparar el fake: revisar cómo `tests/unit/test_library_dialog.py` siembra sonidos en `FakeRemoteClient` (vía `sounds.add_sound` con una sesión fake) y reutilizar ese patrón exacto. Tests:
 
@@ -1180,12 +1180,12 @@ def test_reload_failure_sets_error(qtbot) -> None:
     assert "boom" in model.errorText
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/unit/test_library_model.py -v`
 Expected: FAIL — módulo inexistente
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Crear `src/soundboard/ui/library_model.py`: guarda `self._all: list[tuple[str, str, str]]` (`(sound_id, name, owner_display)`) y `self._rows` (filtrada). `reload()`: pone `loading=True` (+señal), limpia `errorText`, lanza `DownloadWorker` con:
 
@@ -1199,12 +1199,12 @@ Crear `src/soundboard/ui/library_model.py`: guarda `self._all: list[tuple[str, s
 
 `finished` → `self._all = rows`, `_apply_filter()`, `loading=False`; `failed` → `errorText=message`, `loading=False`. `_apply_filter()` hace `beginResetModel()` / filtra por `self._filter.lower() in name.lower()` / `endResetModel()`. Mantener el set `self._active_workers` (mismo motivo de refcount que GridModel). El worker devuelve `object` — `DownloadWorker` ya emite `finished(object)`, sirve para cualquier payload, no solo PCM; actualizar su docstring de módulo para reflejarlo («Runs a callable off the Qt thread; finished carries its return value»).
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/unit/test_library_model.py -v && uv run ruff check . && uv run mypy`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/soundboard/ui/library_model.py tests/unit/test_library_model.py src/soundboard/ui/download_worker.py
@@ -1228,7 +1228,7 @@ git commit -m "feat(ui): add LibraryModel with name filter over the remote libra
   - Métodos Python: `bootstrap()` (decide vista inicial), `shutdown()` (teardown de bridge/engine/hotkeys).
   - `engine_factory: Callable[[GridLayout], Engine]` inyectable; el default resuelve dispositivos con `find_device` y hace `engine.start()` (lógica movida desde `app.py::_start_engine_with_retry`, pero sin loop de diálogo: un intento; el fallo se publica en `setupError` y la vista queda en «setup»).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Crear `tests/unit/test_controller.py`:
 
@@ -1378,12 +1378,12 @@ def test_settings_round_trip_and_stop_all(tmp_path: Path, qtbot) -> None:
 
 `bootstrap` con sesión que falla al restaurar: cubierto por paridad con `app.py` actual — añadir un test si `FakeRemoteClient` permite simular `require_session` fallando; si no, dejarlo documentado en el test module docstring como cubierto por el código heredado.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/unit/test_controller.py -v`
 Expected: FAIL — módulo inexistente
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Crear `src/soundboard/ui/controller.py`. Esqueleto de la lógica central (las propiedades siguen el patrón `_get_x` + `Property(..., notify=...)` de EngineBridge):
 
@@ -1503,12 +1503,12 @@ Crear `src/soundboard/ui/controller.py`. Esqueleto de la lógica central (las pr
 
 Si el archivo supera ~300 líneas, mover `_build_engine` + `FakeStore`-style protocolo de store a un `ui/engine_factory.py` — medir primero.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/unit/test_controller.py tests/unit/ -v && uv run ruff check . && uv run mypy`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/soundboard/ui/controller.py tests/unit/test_controller.py
@@ -1531,7 +1531,7 @@ git commit -m "feat(ui): add AppController owning session, engine and navigation
   - `VUMeter`: property `level: real` (0..1).
   - `Toast`: function `show(text)` — se autooculta a los 4 s.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Crear `tests/unit/test_qml_components.py`:
 
@@ -1564,12 +1564,12 @@ def test_component_instantiates(qapp: object, qml_file: Path) -> None:
     assert obj is not None, errors
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/unit/test_qml_components.py -v`
 Expected: FAIL — directorio/archivos inexistentes
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `qml/qmldir`:
 
@@ -1701,12 +1701,12 @@ Rectangle {
 
 `components/HeaderBar.qml`: `Rectangle` altura 48, `color: Theme.surface`; `RowLayout` con `Text "Soundboard"` (bold, `Theme.textPrimary`), spacer, `Text userEmail` + `Text micName + " → " + outName` (`Theme.textSecondary`, pixelSize 11), `Button "Ajustes"` → `settingsClicked()`, `Button "Detener todo"` → `stopAllClicked()` (fondo `Theme.danger`, texto blanco, vía `background: Rectangle {...}`).
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/unit/test_qml_components.py -v && uv run ruff check . && uv run mypy`
 Expected: PASS (si `BusyIndicator`/`Button` fallan por falta de estilo QtQuick Controls en offscreen, el mensaje de error del test lo dirá — en ese caso añadir `import QtQuick.Controls.Basic` en lugar de `QtQuick.Controls` en los componentes que los usan)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/soundboard/ui/qml tests/unit/test_qml_components.py
@@ -1729,7 +1729,7 @@ git commit -m "feat(ui): add QML theme singleton and board components"
   - `ShortcutPopup`: properties `cellIndex: int`, `currentShortcut: string`; signal `accepted(int cellIndex, string combo)`.
   - `ColorPopup`: property `cellIndex: int`; signal `picked(int cellIndex, string color)`; presets `["#e5484d", "#f5a524", "#3dd68c", "#29a383", "#0091ff", "#7c5cff", "#d6409f", "#f76b15"]` + botón «Sin color» (emite `""`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Ampliar `test_components_exist` en `tests/unit/test_qml_components.py`:
 
@@ -1746,12 +1746,12 @@ def test_views_exist() -> None:
 
 (Las vistas usan `App` y no se instancian standalone — su carga real se verifica en el smoke de Task 13.)
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/unit/test_qml_components.py -v`
 Expected: FAIL — archivos inexistentes
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `Main.qml`:
 
@@ -1920,12 +1920,12 @@ Los tres popups son `Popup` de QtQuick.Controls centrados (`anchors.centerIn: Ov
 - `ShortcutPopup`: `TextField` (`text: currentShortcut; placeholderText: "<ctrl>+<alt>+1"`), `Text` ayuda («Formato pynput. Vacío = quitar atajo», `Theme.textSecondary`), botones «Guardar» (emite `accepted(cellIndex, field.text)` y cierra) y «Cancelar».
 - `ColorPopup`: `Grid` 4×2 de `Rectangle` 32×32 con radius, cada uno un preset, `MouseArea` → `picked(cellIndex, modelData)` + close; debajo `Button "Sin color"` → `picked(cellIndex, "")`.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/unit/test_qml_components.py -v && uv run ruff check . && uv run mypy`
 Expected: PASS — los popups nuevos entran a la parametrización y deben instanciarse standalone (por eso reciben `model` por property y no tocan `App`)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/soundboard/ui/qml tests/unit/test_qml_components.py
@@ -1945,7 +1945,7 @@ git commit -m "feat(ui): add QML views, popups and main window"
 - Consumes: `AppController` (Task 10), `Main.qml` (Task 12), `TrayIcon` (existente, sin cambios).
 - Produces: `run_gui(argv=None, *, backend=None, client=None, store=None, hotkeys=None, exec_app=True) -> int` (misma firma que hoy); `qml_root() -> Path` (resuelve `qml/` tanto en desarrollo como bajo PyInstaller vía `sys._MEIPASS`).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/unit/test_qml_main.py`:
 
@@ -2025,12 +2025,12 @@ def test_run_gui_smoke_without_exec(qapp, tmp_path, monkeypatch) -> None:
     assert code == 0
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/unit/test_qml_main.py tests/unit/test_app.py -v`
 Expected: FAIL — `qml_root` no existe; `run_gui` sigue construyendo `MainWindow`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Rewrite de `src/soundboard/ui/app.py`:
 
@@ -2122,7 +2122,7 @@ def run_gui(
 
 (La variable `tray` debe mantenerse referenciada hasta el final de `run_gui` — no borrarla «porque no se usa»; sin la referencia el ícono se recolecta.)
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/unit/test_qml_main.py tests/unit/test_app.py -v && uv run ruff check . && uv run mypy`
 Expected: PASS (la suite completa aún no — `test_main_window.py` y compañía siguen apuntando a los módulos viejos; caen en la Task 14)
@@ -2132,7 +2132,7 @@ Expected: PASS (la suite completa aún no — `test_main_window.py` y compañía
 Run: `uv run soundboard gui`
 Checklist: login (o sesión guardada) → board se ve con tema oscuro; click reproduce; celda se ilumina con progreso; VU se mueve con el mic; drop de un WAV asigna; menú contextual completo; ajustes cambia dispositivos sin reiniciar; cerrar ventana minimiza a bandeja; «Salir» de la bandeja termina el proceso.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/soundboard/ui/app.py tests/unit/test_app.py tests/unit/test_qml_main.py
