@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/subenoeva/soundboard/compare/v0.3.0...v0.4.0) (2026-07-31)
+
+
+### Features
+
+* **updater:** self-update from signed GitHub releases ([#15](https://github.com/subenoeva/soundboard/issues/15)) ([395c601](https://github.com/subenoeva/soundboard/commit/395c601ed6b3a80d1d25160f6bea2ba5bf18940d))
+
 ## [0.3.0](https://github.com/subenoeva/soundboard/compare/v0.2.2...v0.3.0) (2026-07-31)
 
 
