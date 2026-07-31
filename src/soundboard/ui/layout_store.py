@@ -33,6 +33,7 @@ class Cell:
     source: CellSource
     name: str
     shortcut: str | None = None
+    color: str | None = None
 
 
 @dataclass
@@ -67,6 +68,7 @@ def _cell_to_dict(cell: Cell) -> dict[str, Any]:
         "source": _source_to_dict(cell.source),
         "name": cell.name,
         "shortcut": cell.shortcut,
+        "color": cell.color,
     }
 
 
@@ -76,6 +78,7 @@ def _cell_from_dict(data: dict[str, Any]) -> Cell:
         source=_source_from_dict(data["source"]),
         name=data["name"],
         shortcut=data.get("shortcut"),
+        color=data.get("color"),
     )
 
 

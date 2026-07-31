@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -55,3 +56,29 @@ def test_default_layout_path_lives_under_the_soundboard_config_dir() -> None:
 
     assert path.name == "ui_layout.json"
     assert "soundboard" in str(path).lower()
+
+
+def test_cell_color_round_trips(tmp_path: Path) -> None:
+    path = tmp_path / "layout.json"
+    layout = GridLayout(rows=1, cols=2, mic="m", out="o", blocksize=256)
+    layout.cells = [
+        Cell(index=0, source=LocalSource(path="a.wav"), name="a", color="#e8590c"),
+        Cell(index=1, source=LocalSource(path="b.wav"), name="b"),
+    ]
+    save_layout(path, layout)
+    loaded = load_layout(path)
+    assert loaded is not None
+    assert loaded.cells[0].color == "#e8590c"
+    assert loaded.cells[1].color is None
+
+
+def test_legacy_layout_without_color_loads(tmp_path: Path) -> None:
+    path = tmp_path / "layout.json"
+    path.write_text(json.dumps({
+        "rows": 1, "cols": 1, "mic": "m", "out": "o", "blocksize": 256,
+        "cells": [{"index": 0, "source": {"type": "local", "path": "a.wav"},
+                   "name": "a", "shortcut": None}],
+    }))
+    loaded = load_layout(path)
+    assert loaded is not None
+    assert loaded.cells[0].color is None
