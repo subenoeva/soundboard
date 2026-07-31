@@ -20,6 +20,24 @@ Rectangle {
     border.color: cellState === "playing" ? Theme.accent : "transparent"
     Behavior on border.color { ColorAnimation { duration: 150 } }
 
+    onCellStateChanged: if (cellState === "playing") playPulse.restart()
+
+    // Deliberately a border pulse and not a blurred halo: a real glow needs
+    // MultiEffect / Qt5Compat.GraphicalEffects, which the frozen builds would have to
+    // carry as an extra hidden import for one decorative frame.
+    SequentialAnimation {
+        id: playPulse
+        objectName: "playPulse"
+        NumberAnimation {
+            target: root; property: "border.width"
+            from: 2; to: 6; duration: 90; easing.type: Easing.OutQuad
+        }
+        NumberAnimation {
+            target: root; property: "border.width"
+            to: 2; duration: 240; easing.type: Easing.InQuad
+        }
+    }
+
     Rectangle {
         visible: root.cellColor !== ""
         color: root.cellColor
@@ -41,14 +59,25 @@ Rectangle {
             font.pixelSize: 13
             font.bold: true
         }
-        Text {
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
+        Rectangle {
+            objectName: "shortcutBadge"
             visible: root.shortcut !== ""
-            text: root.shortcut
-            color: Theme.textSecondary
-            elide: Text.ElideMiddle
-            font.pixelSize: 10
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Math.min(parent.width, shortcutLabel.implicitWidth + 12)
+            height: shortcutLabel.implicitHeight + 4
+            radius: Theme.radiusControl
+            color: Theme.padBg
+            Text {
+                id: shortcutLabel
+                objectName: "shortcutLabel"
+                anchors { fill: parent; leftMargin: 6; rightMargin: 6 }
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                text: root.shortcut
+                color: Theme.textSecondary
+                elide: Text.ElideMiddle
+                font.pixelSize: 10
+            }
         }
     }
 
