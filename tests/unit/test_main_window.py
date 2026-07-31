@@ -21,9 +21,13 @@ class _RecordingEngine:
     def __init__(self) -> None:
         self.played: list[np.ndarray] = []
         self.stopped_all = 0
+        self._next_id = 1
 
-    def play(self, pcm: np.ndarray, **kwargs: object) -> None:
+    def play(self, pcm: np.ndarray, **kwargs: object) -> int:
         self.played.append(pcm)
+        voice_id = self._next_id
+        self._next_id += 1
+        return voice_id
 
     def stop_all(self) -> None:
         self.stopped_all += 1
