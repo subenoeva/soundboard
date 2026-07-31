@@ -2151,12 +2151,12 @@ git commit -m "feat(ui): boot the QML window from AppController"
 **Interfaces:**
 - Consumes: nada nuevo. Produces: árbol sin QWidgets muertos; suite verde.
 
-- [ ] **Step 1: Verificar que nada vivo importa los módulos a borrar**
+- [x] **Step 1: Verificar que nada vivo importa los módulos a borrar**
 
 Run: `grep -rn "main_window\|clip_button\|login_dialog\|device_dialog\|library_dialog\|ui.grid\b\|from soundboard.ui.grid import" src/ tests/ --include="*.py"`
 Expected: solo los archivos listados para borrar (y quizá `test_ui_and_hotkeys_packages.py`). Si aparece algo más, arreglarlo primero.
 
-- [ ] **Step 2: Borrar**
+- [x] **Step 2: Borrar**
 
 ```bash
 git rm src/soundboard/ui/main_window.py src/soundboard/ui/grid.py \
@@ -2169,12 +2169,12 @@ git rm src/soundboard/ui/main_window.py src/soundboard/ui/grid.py \
 
 Actualizar `tests/unit/test_ui_and_hotkeys_packages.py` si enumera módulos de `ui/` (añadir los nuevos: `controller`, `grid_model`, `engine_bridge`, `library_model`; quitar los borrados).
 
-- [ ] **Step 3: Run the full suite**
+- [x] **Step 3: Run the full suite**
 
 Run: `uv run pytest && uv run ruff check . && uv run mypy`
 Expected: PASS, todo verde
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add -A
@@ -2194,7 +2194,7 @@ git commit -m "refactor(ui): drop the QWidgets layer replaced by QML"
 - Consumes: `qml_root()` (Task 13) — resuelve `sys._MEIPASS/soundboard/ui/qml`, así que el destino de los datas DEBE ser `soundboard/ui/qml`.
 - Produces: specs que empaquetan `src/soundboard/ui/qml/**` como datos y fuerzan los módulos QtQuick de PySide6.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Leer primero `tests/unit/test_packaging_windows_spec.py` para copiar su forma de inspeccionar el spec (lectura de texto o exec). Añadir en el estilo del archivo, para ambos specs:
 
@@ -2210,12 +2210,12 @@ def test_spec_keeps_quick_controls() -> None:
     assert "PySide6.QtQuickControls2" in text
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/unit/test_packaging_windows_spec.py tests/unit/test_packaging_linux_spec.py -v`
 Expected: FAIL
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 En ambos specs, dentro de `Analysis(...)`:
 
@@ -2237,17 +2237,17 @@ En ambos specs, dentro de `Analysis(...)`:
 
 (El spec de Linux puede tener una lista de hiddenimports distinta — añadir los tres módulos PySide6 a la que exista, no reemplazarla. Los hooks estándar de PyInstaller para PySide6 recogen los plugins/QML de Qt al ver estos imports.)
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/unit/ -k packaging -v && uv run ruff check . && uv run mypy`
 Expected: PASS
 
-- [ ] **Step 5: Build de humo en Windows (opcional pero recomendado antes del PR)**
+- [x] **Step 5: Build de humo en Windows (opcional pero recomendado antes del PR)**
 
 Run: `uv sync --group packaging && uv run pyinstaller packaging/windows/soundboard.spec --noconfirm --distpath dist-smoke`
 Expected: `dist-smoke/soundboard.exe` arranca y muestra la ventana QML (probar a mano; borrar `dist-smoke/` después).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packaging tests/unit/test_packaging_windows_spec.py tests/unit/test_packaging_linux_spec.py
