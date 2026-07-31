@@ -1,68 +1,55 @@
-"""GUI entry point: resolves the session, the grid layout and the devices, then runs
-the window."""
+"""GUI entry point: builds the AppController, loads Main.qml, wires the tray."""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import cast
 
 import platformdirs
-from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
+from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtQuick import QQuickWindow
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from soundboard.audio.backend import AudioBackend
-from soundboard.audio.engine import AudioEngine, EngineConfig
-from soundboard.audio.portaudio import PortAudioBackend, find_device
+from soundboard.audio.portaudio import PortAudioBackend
 from soundboard.hotkeys import HotkeyManager, PynputHotkeyManager
 from soundboard.library.cache import SoundCache
-from soundboard.remote import auth
 from soundboard.remote.client import SessionStore, build_client
-from soundboard.remote.models import RemoteClient, Session
-from soundboard.ui.device_dialog import DeviceSettingsDialog
-from soundboard.ui.layout_store import GridLayout, default_layout_path, load_layout, save_layout
-from soundboard.ui.login_dialog import LoginDialog
-from soundboard.ui.main_window import MainWindow
+from soundboard.remote.models import RemoteClient
+from soundboard.ui.controller import AppController
+from soundboard.ui.engine_factory import Store
+from soundboard.ui.layout_store import default_layout_path
+from soundboard.ui.tray import TrayIcon
+
+if sys.platform == "win32":
+    # PySide6 adds its own package directory to PATH in PySide6/__init__.py, but on
+    # some Windows setups that isn't enough for the QML engine's internal DLL loader to
+    # resolve a QML plugin's own dependencies — e.g. QtQuick's qtquick2plugin.dll
+    # depending on Qt6Quick.dll — failing with "the specified module could not be
+    # found" even though the file sits right next to PySide6/__init__.py. Registering
+    # the directory via os.add_dll_directory (rather than relying on PATH) fixes it;
+    # must run before the first QQmlEngine is constructed. Mirrors the equivalent fix
+    # in tests/unit/conftest.py, which only runs under pytest and never touches this
+    # production entry point.
+    import os
+
+    import PySide6
+
+    _pyside6_dir = Path(PySide6.__file__).resolve().parent
+    os.add_dll_directory(str(_pyside6_dir))
 
 
 def _default_cache_dir() -> Path:
     return Path(platformdirs.user_cache_dir("soundboard")) / "pcm"
 
 
-def _start_engine_with_retry(
-    backend: AudioBackend, layout: GridLayout, layout_path: Path
-) -> AudioEngine | None:
-    """Resolve devices and start the engine, reopening the device dialog on failure.
-
-    A saved device name that no longer matches anything (unplugged hardware, a
-    renamed cable) or a real PortAudio failure both land here rather than crashing —
-    the spec requires a way back into device selection, never a silent exit.
-    """
-    while True:
-        try:
-            devices = backend.list_devices()
-            microphone = find_device(devices, layout.mic, want_input=True)
-            cable = find_device(devices, layout.out, want_input=False)
-            engine = AudioEngine(
-                backend,
-                EngineConfig(
-                    blocksize=layout.blocksize,
-                    input_device=microphone.index,
-                    output_device=cable.index,
-                    output_channels=min(2, cable.max_output_channels) or 1,
-                ),
-            )
-            engine.start()
-        except Exception as exc:
-            QMessageBox.warning(None, "No se pudo iniciar el motor", str(exc))
-            dialog = DeviceSettingsDialog(backend, current=layout)
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                return None
-            layout.mic = dialog.selected_mic()
-            layout.out = dialog.selected_out()
-            layout.rows = dialog.selected_rows()
-            layout.cols = dialog.selected_cols()
-            save_layout(layout_path, layout)
-            continue
-        return engine
+def qml_root() -> Path:
+    """Locate qml/ both in a checkout and inside a PyInstaller bundle."""
+    bundled = getattr(sys, "_MEIPASS", None)
+    if bundled is not None:
+        return Path(bundled) / "soundboard" / "ui" / "qml"
+    return Path(__file__).parent / "qml"
 
 
 def run_gui(
@@ -70,7 +57,7 @@ def run_gui(
     *,
     backend: AudioBackend | None = None,
     client: RemoteClient | None = None,
-    store: SessionStore | None = None,
+    store: Store | None = None,
     hotkeys: HotkeyManager | None = None,
     exec_app: bool = True,
 ) -> int:
@@ -80,63 +67,37 @@ def run_gui(
         try:
             client = build_client()
         except Exception as exc:
-            # Double-clicked by a non-technical user: a corrupt settings.json or an exe
-            # built without baked-in defaults would otherwise be a raw traceback dialog
-            # on Windows and complete silence under a Linux file manager.
+            # Double-clicked by a non-technical user: a corrupt settings.json
+            # must be a dialog, not a traceback (or silence under a file manager).
             QMessageBox.critical(None, "Configuración inválida", str(exc))
             return 1
 
-    store = store if store is not None else SessionStore()
-    backend = backend if backend is not None else PortAudioBackend()
-    hotkeys = hotkeys if hotkeys is not None else PynputHotkeyManager()
+    controller = AppController(
+        client=client,
+        store=store if store is not None else SessionStore(),
+        backend=backend if backend is not None else PortAudioBackend(),
+        hotkeys=hotkeys if hotkeys is not None else PynputHotkeyManager(),
+        cache=SoundCache(_default_cache_dir()),
+        layout_path=default_layout_path(),
+    )
+    controller.bootstrap()
 
-    session: Session | None = None
-    session_needs_login = store.load() is None
-    if not session_needs_login:
-        try:
-            session = auth.require_session(client, store)
-        except Exception:
-            # Supabase rotates the refresh token on every use. A token saved by a
-            # previous run that already got consumed elsewhere (or never made it to
-            # a second write) makes the SDK's own refresh call raise before any
-            # window opens, crashing straight to a traceback. Treat that the same
-            # as "logged out" instead: drop the stale session and let LoginDialog
-            # get a fresh one.
-            store.clear()
-            session_needs_login = True
-
-    if session_needs_login:
-        login = LoginDialog(client, store)
-        if login.exec() != QDialog.DialogCode.Accepted:
-            return 1
-        assert login.session is not None
-        session = login.session
-
-    assert session is not None
-
-    layout_path = default_layout_path()
-    layout = load_layout(layout_path)
-    if layout is None:
-        dialog = DeviceSettingsDialog(backend)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return 1
-        layout = GridLayout(
-            rows=dialog.selected_rows(),
-            cols=dialog.selected_cols(),
-            mic=dialog.selected_mic(),
-            out=dialog.selected_out(),
-            blocksize=256,
-        )
-        save_layout(layout_path, layout)
-
-    engine = _start_engine_with_retry(backend, layout, layout_path)
-    if engine is None:
+    engine = QQmlApplicationEngine()
+    engine.rootContext().setContextProperty("App", controller)
+    engine.load(str(qml_root() / "Main.qml"))
+    if not engine.rootObjects():
+        QMessageBox.critical(None, "Error de interfaz", "No se pudo cargar la interfaz")
         return 1
+    window = cast(QQuickWindow, engine.rootObjects()[0])
 
-    cache = SoundCache(_default_cache_dir())
-    window = MainWindow(engine, client, session, cache, hotkeys, layout, layout_path)
-    window.show()
+    def quit_app() -> None:
+        app.quit()
+
+    tray = TrayIcon(on_show=window.show, on_quit=quit_app)
+    tray.show()
+    app.aboutToQuit.connect(controller.shutdown)
 
     if not exec_app:
+        controller.shutdown()
         return 0
     return app.exec()
