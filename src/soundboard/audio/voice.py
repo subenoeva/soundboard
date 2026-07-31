@@ -19,6 +19,7 @@ class Voice:
         loop: bool = False,
         start: int = 0,
         end: int | None = None,
+        voice_id: int = 0,
     ) -> None:
         length = pcm.shape[0]
         self._pcm: np.ndarray = pcm
@@ -28,10 +29,19 @@ class Voice:
         self._end: int = length if end is None else max(self._start, min(end, length))
         self._position: int = self._start
         self.finished: bool = self._end <= self._start
+        self.voice_id: int = voice_id
 
     @property
     def position(self) -> int:
         return self._position
+
+    @property
+    def progress(self) -> float:
+        """Fraction of the start..end range already played, 0..1."""
+        span = self._end - self._start
+        if span <= 0:
+            return 1.0
+        return min(1.0, (self._position - self._start) / span)
 
     def mix_into(self, out: np.ndarray) -> None:
         """Add the next block of this voice onto ``out``."""

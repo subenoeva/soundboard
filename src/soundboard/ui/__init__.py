@@ -1,1 +1,1 @@
-"""PySide6 desktop UI: window, clip grid, tray icon. The only package that imports Qt."""
+"""QML desktop UI: AppController, QML models, tray icon. The only package that imports Qt."""

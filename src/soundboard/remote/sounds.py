@@ -117,3 +117,8 @@ def resolve_pcm(client: RemoteClient, cache: SoundCache, sound: Sound) -> np.nda
         return client.storage_download(BUCKET, sound.storage_path)
 
     return cache.get_or_fetch(sound.sha256, fetch, expected_frames=sound.duration_frames)
+
+
+def resolve_pcm_by_id(client: RemoteClient, cache: SoundCache, sound_id: str) -> np.ndarray:
+    """Both halves of the playback path when all the caller has is the sound id."""
+    return resolve_pcm(client, cache, get_sound(client, sound_id))

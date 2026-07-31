@@ -33,6 +33,7 @@ class Cell:
     source: CellSource
     name: str
     shortcut: str | None = None
+    color: str | None = None
 
 
 @dataclass
@@ -45,6 +46,20 @@ class GridLayout:
     out: str
     blocksize: int
     cells: list[Cell] = field(default_factory=list)
+
+
+def trim_cells_to_bounds(layout: GridLayout) -> list[Cell]:
+    """Drop the cells outside ``rows * cols``, in place; return the dropped ones.
+
+    A cell the grid no longer has room for is unreachable: no pad renders it, so it
+    can never be cleared or re-bound, yet its global shortcut would keep firing and
+    it would survive in the saved layout forever. Shrinking the grid discards it.
+    """
+    capacity = layout.rows * layout.cols
+    dropped = [cell for cell in layout.cells if cell.index >= capacity]
+    if dropped:
+        layout.cells = [cell for cell in layout.cells if cell.index < capacity]
+    return dropped
 
 
 def _source_to_dict(source: CellSource) -> dict[str, Any]:
@@ -67,6 +82,7 @@ def _cell_to_dict(cell: Cell) -> dict[str, Any]:
         "source": _source_to_dict(cell.source),
         "name": cell.name,
         "shortcut": cell.shortcut,
+        "color": cell.color,
     }
 
 
@@ -76,6 +92,7 @@ def _cell_from_dict(data: dict[str, Any]) -> Cell:
         source=_source_from_dict(data["source"]),
         name=data["name"],
         shortcut=data.get("shortcut"),
+        color=data.get("color"),
     )
 
 

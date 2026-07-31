@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 from collections import deque
 from dataclasses import dataclass
 
@@ -58,6 +59,7 @@ class AudioEngine:
         self._ratio = 1.0
         self._input_stream: Stream | None = None
         self._output_stream: Stream | None = None
+        self._voice_ids = itertools.count(1)
 
     @property
     def mixer(self) -> Mixer:
@@ -126,14 +128,28 @@ class AudioEngine:
         loop: bool = False,
         start: int = 0,
         end: int | None = None,
-    ) -> None:
-        """Queue a clip for playback. Safe to call from any thread."""
-        voice = Voice(pcm, gain=gain, loop=loop, start=start, end=end)
+    ) -> int:
+        """Queue a clip for playback; returns its voice id. Safe from any thread.
+
+        The id comes from itertools.count, whose next() is a single C call and
+        therefore safe under concurrent callers from different threads.
+        """
+        voice_id = next(self._voice_ids)
+        voice = Voice(pcm, gain=gain, loop=loop, start=start, end=end, voice_id=voice_id)
         self._commands.append(("play", voice))
+        return voice_id
 
     def stop_all(self) -> None:
         """Stop every playing clip. Safe to call from any thread."""
         self._commands.append(("stop_all", None))
+
+    def voice_states(self) -> list[tuple[int, float]]:
+        """(voice_id, progress) snapshot; safe to call from the UI thread."""
+        return self._mixer.voice_states()
+
+    @property
+    def last_peak(self) -> float:
+        return self._mixer.last_peak
 
     def _on_input(self, block: np.ndarray) -> None:
         self._ring.write(block)

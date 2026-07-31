@@ -22,11 +22,20 @@ a = Analysis(
     [entry_point],
     pathex=[os.path.join(SPECPATH, "..", "..", "src")],
     binaries=xlib_binaries,
-    datas=xlib_datas,
+    datas=[
+        *xlib_datas,
+        (
+            os.path.join(SPECPATH, "..", "..", "src", "soundboard", "ui", "qml"),
+            os.path.join("soundboard", "ui", "qml"),
+        ),
+    ],
     hiddenimports=[
         *collect_submodules("keyring.backends"),
         *collect_submodules("pynput"),
         *xlib_hiddenimports,
+        "PySide6.QtQml",
+        "PySide6.QtQuick",
+        "PySide6.QtQuickControls2",
     ],
     hookspath=[],
     hooksconfig={},

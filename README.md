@@ -160,12 +160,18 @@ uv run soundboard gui
 
 La primera vez pide iniciar sesión (si no había una guardada) y elegir micrófono, cable
 virtual y tamaño de la rejilla; las siguientes veces reusa esa configuración desde
-`<config>/soundboard/ui_layout.json`. Un clic dispara la celda; arrastrar un archivo de
-audio sobre una celda vacía lo sube y lo comparte en la biblioteca; clic derecho permite
-asignar un atajo de teclado, asignar un sonido que ya compartió otra persona ("Asignar
-desde biblioteca") o vaciar la celda. Cerrar la ventana la minimiza a la bandeja del
-sistema — "Salir" desde ahí (o desde el menú de la ventana) corta el motor de audio de
-verdad.
+`<config>/soundboard/ui_layout.json`.
+
+La ventana es oscura, con un encabezado que muestra la cuenta y los dispositivos en uso,
+la rejilla de celdas en el centro y un pie con el VU meter de la salida y las métricas
+del motor. Un clic dispara la celda, que se ilumina y dibuja su progreso mientras suena;
+arrastrar un archivo de audio sobre una celda vacía lo sube y lo comparte en la
+biblioteca. Clic derecho permite asignar un sonido que ya compartió otra persona
+("Asignar desde biblioteca"), asignar un atajo de teclado, elegir un color para la celda
+o vaciarla. Desde "Ajustes" se pueden cambiar micrófono, salida y tamaño de la rejilla
+sin reiniciar la aplicación; si la rejilla se achica, las celdas que quedan fuera se
+descartan. "Detener todo" corta la reproducción en curso. Cerrar la ventana la minimiza a
+la bandeja del sistema — "Salir" desde ahí corta el motor de audio de verdad.
 
 Los atajos de teclado funcionan incluso sin que la ventana tenga el foco, salvo en
 Linux con Wayland, donde los atajos globales no funcionan por diseño del protocolo.
@@ -263,10 +269,14 @@ Fases futuras, no implementadas todavía:
 - **Biblioteca de sonidos**: ✅ diseñada e implementada — multiusuario sobre Supabase
   (Postgres + Storage + Auth), caché local de reproducción, CRUD con RLS por dueño.
   Ver [`docs/superpowers/specs/2026-07-29-supabase-sounds-design.md`](docs/superpowers/specs/2026-07-29-supabase-sounds-design.md).
-- **Interfaz gráfica**: ✅ diseñada e implementada — ventana PySide6, rejilla de clips
-  locales y de la biblioteca Supabase, arrastrar y soltar, bandeja del sistema, atajos
-  globales configurables por celda. Ver
-  [`docs/superpowers/specs/2026-07-30-gui-design.md`](docs/superpowers/specs/2026-07-30-gui-design.md).
+- **Interfaz gráfica**: ✅ diseñada e implementada — ventana Qt Quick con tema oscuro,
+  rejilla de clips locales y de la biblioteca Supabase, feedback de reproducción por celda,
+  VU meter, color por celda, arrastrar y soltar, bandeja del sistema, atajos globales
+  configurables por celda. Ver
+  [`docs/superpowers/specs/2026-07-31-gui-qml-redesign-design.md`](docs/superpowers/specs/2026-07-31-gui-qml-redesign-design.md)
+  (rediseño vigente) y
+  [`docs/superpowers/specs/2026-07-30-gui-design.md`](docs/superpowers/specs/2026-07-30-gui-design.md)
+  (diseño original en QWidgets, ya reemplazado).
 - **Ejecutables standalone**: ✅ diseñados e implementados — releases automáticas vía
   `release-please` + PyInstaller, ver
   [`docs/superpowers/specs/2026-07-30-standalone-executables-design.md`](docs/superpowers/specs/2026-07-30-standalone-executables-design.md).

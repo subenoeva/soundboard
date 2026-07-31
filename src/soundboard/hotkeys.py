@@ -22,7 +22,9 @@ class HotkeyManager(Protocol):
 
     def unregister(self, combo: str) -> None: ...
 
-    def stop(self) -> None: ...
+    def stop(self) -> None:
+        """Release the OS hook and forget every combo registered so far."""
+        ...
 
 
 class PynputHotkeyManager:
@@ -47,12 +49,19 @@ class PynputHotkeyManager:
         self._restart()
 
     def stop(self) -> None:
+        self._stop_listener()
+        # Forgetting the callbacks is the point: they belong to whoever registered
+        # them, and a later register() would otherwise resurrect them all when it
+        # rebuilds the listener from the full mapping.
+        self._callbacks.clear()
+
+    def _stop_listener(self) -> None:
         if self._listener is not None:
             self._listener.stop()
             self._listener = None
 
     def _restart(self) -> None:
-        self.stop()
+        self._stop_listener()
         if self._callbacks:
             self._listener = keyboard.GlobalHotKeys(dict(self._callbacks))
             self._listener.start()
