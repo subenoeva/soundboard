@@ -1,10 +1,9 @@
 """Generates a flat-color placeholder PNG icon for the AppImage.
 
-No custom icon design is in scope (see the "Fuera de alcance" section of
-docs/superpowers/specs/2026-07-30-standalone-executables-design.md) — this only
-needs to exist so appimagetool has something to point ``Icon=`` at. Uses only the
-standard library so the release workflow doesn't need an extra system package (e.g.
-ImageMagick) or Python dependency (e.g. Pillow) just to draw one flat-color square.
+No custom icon design is in scope — this only needs to exist so appimagetool has
+something to point ``Icon=`` at. Uses only the standard library so the release
+workflow doesn't need an extra system package (e.g. ImageMagick) or Python
+dependency (e.g. Pillow) just to draw one flat-color square.
 """
 
 from __future__ import annotations

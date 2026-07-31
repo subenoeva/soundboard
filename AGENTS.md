@@ -96,8 +96,8 @@ PySide6, or `pynput`. `ui/` and `hotkeys.py` may import `audio/`, `remote/`, `li
 
 ## Project conventions
 
-- Code, identifiers, docstrings, and commit messages: English. Product docs (README,
-  design specs, plans): Spanish.
+- Everything committed to the repo is written in English: code, identifiers, docstrings,
+  comments, commit messages, PR descriptions and the README.
 - No AI attribution anywhere — not in commit messages, not in PR titles/descriptions, not
   anywhere else in the repo. No `Co-Authored-By: Claude ...` trailer, no "Generated with
   Claude Code" footer, no emoji robot signature. Commits and PRs read as if written by the
@@ -108,12 +108,11 @@ PySide6, or `pynput`. `ui/` and `hotkeys.py` may import `audio/`, `remote/`, `li
 - No silent failures — every error path is visible (a re-raised exception with a clear
   message, a toast in the GUI, a `QMessageBox` for the two fatal boot paths), never a
   swallowed exception or a default that masks the problem.
-- Strict TDD: failing test first, minimal implementation, confirm it passes. Non-trivial
-  features get a design spec at `docs/superpowers/specs/YYYY-MM-DD-<name>-design.md`
-  (approved before planning) broken down into a step-by-step, bite-sized TDD plan at
-  `docs/superpowers/plans/YYYY-MM-DD-<name>.md` — see the existing specs/plans in
-  `docs/superpowers/` for the established format and the reasoning behind past decisions
-  before writing a new one.
+- Strict TDD: failing test first, minimal implementation, confirm it passes. For
+  non-trivial features, agree on the design and a step-by-step plan before writing code —
+  keep both out of the repo (the checkout carries code, tests and the README, nothing
+  else). The reasoning behind a past decision belongs in a docstring or a comment next to
+  the code it explains, where it can't drift out of sync.
 - No worktrees — one branch, one checkout. Don't create a `git worktree` for a feature; just
   branch off `master` in the normal working directory.
 - Branch names use a slash, not a hyphen: `feature/<name>`, `fix/<name>`, off `master`

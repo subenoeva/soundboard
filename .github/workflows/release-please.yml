@@ -21,5 +21,4 @@ jobs:
           # `contents: write` + `pull-requests: write` on this repo and store it as the
           # RELEASE_PLEASE_TOKEN secret (manual, one-time repo setup — this workflow
           # cannot create the secret itself).
-          # See docs/superpowers/specs/2026-07-30-standalone-executables-design.md.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
