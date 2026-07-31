@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/subenoeva/soundboard/compare/v0.2.1...v0.2.2) (2026-07-31)
+
+
+### Bug Fixes
+
+* fall back to login when a stored session fails to restore ([#10](https://github.com/subenoeva/soundboard/issues/10)) ([f969ec7](https://github.com/subenoeva/soundboard/commit/f969ec70e155a550f231676ecd92837afb324333))
+
 ## [0.2.1](https://github.com/subenoeva/soundboard/compare/v0.2.0...v0.2.1) (2026-07-31)
 
 
