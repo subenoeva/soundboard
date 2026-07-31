@@ -2127,7 +2127,7 @@ def run_gui(
 Run: `uv run pytest tests/unit/test_qml_main.py tests/unit/test_app.py -v && uv run ruff check . && uv run mypy`
 Expected: PASS (la suite completa aún no — `test_main_window.py` y compañía siguen apuntando a los módulos viejos; caen en la Task 14)
 
-- [ ] **Step 5: Manual verification (primera vez que la app entera es visible)**
+- [x] **Step 5: Manual verification (primera vez que la app entera es visible)**
 
 Run: `uv run soundboard gui`
 Checklist: login (o sesión guardada) → board se ve con tema oscuro; click reproduce; celda se ilumina con progreso; VU se mueve con el mic; drop de un WAV asigna; menú contextual completo; ajustes cambia dispositivos sin reiniciar; cerrar ventana minimiza a bandeja; «Salir» de la bandeja termina el proceso.
