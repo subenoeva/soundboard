@@ -38,6 +38,7 @@ class Mixer:
         self._threshold = duck_threshold
         self.output_gain = 1.0
         self.ducking_enabled = True
+        self.last_peak: float = 0.0
 
     @property
     def active_voices(self) -> int:
@@ -48,6 +49,15 @@ class Mixer:
 
     def stop_all(self) -> None:
         self._voices.clear()
+
+    def voice_states(self) -> list[tuple[int, float]]:
+        """Snapshot of (voice_id, progress) for the active voices.
+
+        Called from the UI thread while the audio callback mutates the voice
+        list; iterating a shallow copy under the GIL is safe, and a state one
+        block stale is fine for painting a progress bar.
+        """
+        return [(v.voice_id, v.progress) for v in list(self._voices) if not v.finished]
 
     def process(self, mic: np.ndarray, out: np.ndarray) -> None:
         """Render one block: ``out = limit((mic * duck) + sounds)``."""
@@ -73,3 +83,4 @@ class Mixer:
         np.divide(out, CEILING, out=out)
         np.tanh(out, out=out)
         np.multiply(out, CEILING, out=out)
+        self.last_peak = float(np.max(np.abs(out)))

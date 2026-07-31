@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from soundboard.audio.mixer import CEILING, Mixer
 from soundboard.audio.voice import Voice
@@ -95,3 +96,35 @@ def test_output_gain_scales_the_mix() -> None:
     mixer.process(mic, out)
 
     assert np.allclose(out, 0.1, atol=1e-3)
+
+
+def test_voice_states_reports_id_and_progress() -> None:
+    mixer = Mixer(blocksize=50)
+    pcm = np.ones(100, dtype=np.float32) * 0.1
+    mixer.add_voice(Voice(pcm, voice_id=3))
+    mic = np.zeros(50, dtype=np.float32)
+    out = np.zeros(50, dtype=np.float32)
+    mixer.process(mic, out)
+    states = mixer.voice_states()
+    assert states == [(3, pytest.approx(0.5))]  # type: ignore[comparison-overlap]
+
+
+def test_voice_states_drops_finished_voices() -> None:
+    mixer = Mixer(blocksize=50)
+    mixer.add_voice(Voice(np.ones(50, dtype=np.float32) * 0.1, voice_id=1))
+    mic = np.zeros(50, dtype=np.float32)
+    out = np.zeros(50, dtype=np.float32)
+    mixer.process(mic, out)
+    assert mixer.voice_states() == []
+
+
+def test_last_peak_tracks_output_block() -> None:
+    mixer = Mixer(blocksize=50)
+    mic = np.zeros(50, dtype=np.float32)
+    out = np.zeros(50, dtype=np.float32)
+    mixer.process(mic, out)
+    assert mixer.last_peak == 0.0
+    mixer.add_voice(Voice(np.ones(100, dtype=np.float32) * 0.5, voice_id=1))
+    mixer.process(mic, out)
+    assert mixer.last_peak == pytest.approx(float(np.max(np.abs(out))))
+    assert mixer.last_peak > 0.0
