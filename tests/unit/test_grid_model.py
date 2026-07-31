@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 import pytest
 import soundfile as sf
+from PySide6.QtCore import QUrl
 
 from soundboard.hotkeys import FakeHotkeyManager
 from soundboard.library.cache import SoundCache
@@ -190,3 +191,113 @@ def test_play_remote_cell_download_failure_resets_to_idle_and_toasts(
     )
     assert engine.played == []
     assert messages
+
+
+def test_assign_local_valid_file_uploads_and_sets_remote_idle(
+    tmp_path: Path, hotkeys: FakeHotkeyManager, qtbot: Any
+) -> None:
+    wav = make_wav(tmp_path / "airhorn.wav")
+    model, _engine, layout = make_model(tmp_path, hotkeys)
+
+    # Also exercises the file: URL branch of assign_local's path parsing.
+    model.assign_local(0, QUrl.fromLocalFile(str(wav)).toString())
+
+    assert model.data(model.index(0), GridModel.STATE_ROLE) == STATE_LOADING
+    qtbot.waitUntil(
+        lambda: model.data(model.index(0), GridModel.STATE_ROLE) == STATE_IDLE, timeout=2000
+    )
+    assert model.data(model.index(0), GridModel.NAME_ROLE) == "airhorn"
+    cell = next(c for c in layout.cells if c.index == 0)
+    assert isinstance(cell.source, RemoteSource)
+
+
+def test_assign_local_invalid_file_toasts_and_stays_empty(
+    tmp_path: Path, hotkeys: FakeHotkeyManager
+) -> None:
+    bogus = tmp_path / "not_audio.txt"
+    bogus.write_text("hello")
+    model, _engine, _layout = make_model(tmp_path, hotkeys)
+    messages: list[str] = []
+    model.toast.connect(messages.append)
+
+    model.assign_local(0, str(bogus))
+
+    assert messages
+    assert model.data(model.index(0), GridModel.STATE_ROLE) == STATE_EMPTY
+
+
+def test_assign_local_occupied_cell_is_noop(
+    tmp_path: Path, hotkeys: FakeHotkeyManager
+) -> None:
+    wav = make_wav(tmp_path / "airhorn.wav")
+    cell = Cell(index=0, source=LocalSource(path="a.wav"), name="a")
+    model, _engine, _layout = make_model(tmp_path, hotkeys, cells=[cell])
+
+    model.assign_local(0, str(wav))
+
+    assert model.data(model.index(0), GridModel.NAME_ROLE) == "a"
+    assert model.data(model.index(0), GridModel.STATE_ROLE) == STATE_IDLE
+
+
+def test_assign_remote_sets_cell_and_saves(
+    tmp_path: Path, hotkeys: FakeHotkeyManager
+) -> None:
+    model, _, layout = make_model(tmp_path, hotkeys)
+    model.assign_remote(2, "sound-id-1", "applause")
+    assert model.data(model.index(2), GridModel.NAME_ROLE) == "applause"
+    assert (tmp_path / "layout.json").exists()
+    assert any(c.index == 2 for c in layout.cells)
+
+
+def test_assign_remote_refuses_occupied_cell(
+    tmp_path: Path, hotkeys: FakeHotkeyManager
+) -> None:
+    cell = Cell(index=0, source=LocalSource(path="a.wav"), name="a")
+    model, _, _ = make_model(tmp_path, hotkeys, cells=[cell])
+    model.assign_remote(0, "sound-id-1", "applause")
+    assert model.data(model.index(0), GridModel.NAME_ROLE) == "a"
+
+
+def test_clear_cell_unregisters_shortcut_and_empties(
+    tmp_path: Path, hotkeys: FakeHotkeyManager
+) -> None:
+    cell = Cell(index=0, source=LocalSource(path="a.wav"), name="a", shortcut="<ctrl>+1")
+    model, _, layout = make_model(tmp_path, hotkeys, cells=[cell])
+    model.clear_cell(0)
+    assert model.data(model.index(0), GridModel.STATE_ROLE) == STATE_EMPTY
+    assert layout.cells == []
+    with pytest.raises(KeyError):
+        hotkeys.trigger("<ctrl>+1")
+
+
+def test_set_shortcut_registers_and_persists(
+    tmp_path: Path, hotkeys: FakeHotkeyManager
+) -> None:
+    cell = Cell(index=0, source=LocalSource(path="a.wav"), name="a")
+    model, _, layout = make_model(tmp_path, hotkeys, cells=[cell])
+    model.set_shortcut(0, "<ctrl>+2")
+    assert layout.cells[0].shortcut == "<ctrl>+2"
+    hotkeys.trigger("<ctrl>+2")  # no lanza
+
+
+def test_set_shortcut_invalid_combo_toasts_and_keeps_cell(
+    tmp_path: Path, hotkeys: FakeHotkeyManager
+) -> None:
+    cell = Cell(index=0, source=LocalSource(path="a.wav"), name="a")
+    model, _, layout = make_model(tmp_path, hotkeys, cells=[cell])
+    messages: list[str] = []
+    model.toast.connect(messages.append)
+    model.set_shortcut(0, "not-a-combo")
+    assert messages
+    assert layout.cells[0].shortcut is None
+
+
+def test_set_color_persists_and_clears(
+    tmp_path: Path, hotkeys: FakeHotkeyManager
+) -> None:
+    cell = Cell(index=0, source=LocalSource(path="a.wav"), name="a")
+    model, _, layout = make_model(tmp_path, hotkeys, cells=[cell])
+    model.set_color(0, "#e8590c")
+    assert model.data(model.index(0), GridModel.COLOR_ROLE) == "#e8590c"
+    model.set_color(0, "")
+    assert layout.cells[0].color is None
