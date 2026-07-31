@@ -12,7 +12,7 @@ from typing import Any, Protocol, cast
 
 import keyring
 import platformdirs
-from keyring.errors import PasswordDeleteError
+from keyring.errors import NoKeyringError, PasswordDeleteError
 from supabase import create_client
 
 from soundboard.remote.models import Session
@@ -34,17 +34,25 @@ class SessionStore:
         self._backend: KeyringBackend = backend if backend is not None else keyring
 
     def save(self, session: Session) -> None:
-        self._backend.set_password(_SERVICE_NAME, _KEYRING_USERNAME, json.dumps(asdict(session)))
+        # no OS credential store running (e.g. a bare Wayland WM with no Secret Service
+        # daemon): degrade to an unpersisted session instead of crashing right after login
+        with contextlib.suppress(NoKeyringError):
+            self._backend.set_password(
+                _SERVICE_NAME, _KEYRING_USERNAME, json.dumps(asdict(session))
+            )
 
     def load(self) -> Session | None:
-        raw = self._backend.get_password(_SERVICE_NAME, _KEYRING_USERNAME)
+        try:
+            raw = self._backend.get_password(_SERVICE_NAME, _KEYRING_USERNAME)
+        except NoKeyringError:
+            return None
         if raw is None:
             return None
         return Session(**json.loads(raw))
 
     def clear(self) -> None:
         # already empty: clearing an absent session is not an error
-        with contextlib.suppress(PasswordDeleteError):
+        with contextlib.suppress(PasswordDeleteError, NoKeyringError):
             self._backend.delete_password(_SERVICE_NAME, _KEYRING_USERNAME)
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from keyring.errors import PasswordDeleteError
+from keyring.errors import NoKeyringError, PasswordDeleteError
 
 from soundboard.remote.client import (
     SessionStore,
@@ -34,6 +34,19 @@ class _FakeKeyringBackend:
             raise PasswordDeleteError("password not found") from None
 
 
+class _NoBackendKeyring:
+    """Stand-in for a machine with no Secret Service/keyring daemon running."""
+
+    def get_password(self, service: str, username: str) -> str | None:
+        raise NoKeyringError("no recommended backend was available")
+
+    def set_password(self, service: str, username: str, password: str) -> None:
+        raise NoKeyringError("no recommended backend was available")
+
+    def delete_password(self, service: str, username: str) -> None:
+        raise NoKeyringError("no recommended backend was available")
+
+
 def test_session_store_round_trips_a_session() -> None:
     store = SessionStore(backend=_FakeKeyringBackend())
     session = Session(access_token="a", refresh_token="b", user_id="u", email="e@x.com")
@@ -57,6 +70,24 @@ def test_session_store_clear_is_idempotent() -> None:
     store.clear()  # second clear on an already-empty store must not raise
 
     assert store.load() is None
+
+
+def test_session_store_load_falls_back_to_none_without_a_keyring_backend() -> None:
+    store = SessionStore(backend=_NoBackendKeyring())
+
+    assert store.load() is None
+
+
+def test_session_store_save_does_not_raise_without_a_keyring_backend() -> None:
+    store = SessionStore(backend=_NoBackendKeyring())
+
+    store.save(Session(access_token="a", refresh_token="b", user_id="u", email="e@x.com"))
+
+
+def test_session_store_clear_does_not_raise_without_a_keyring_backend() -> None:
+    store = SessionStore(backend=_NoBackendKeyring())
+
+    store.clear()
 
 
 def test_load_supabase_config_prefers_environment_variables() -> None:

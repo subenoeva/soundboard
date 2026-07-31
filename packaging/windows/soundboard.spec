@@ -4,7 +4,10 @@
 keyring discovers its backends (here: the Windows Credential Locker) via
 entry-points, which PyInstaller's static import analysis does not follow —
 without collect_submodules the packaged exe raises "no recommended backend"
-at runtime. See docs/superpowers/specs/2026-07-30-standalone-executables-design.md.
+at runtime. pynput has the same problem: it picks pynput.keyboard._win32 /
+pynput.mouse._win32 via importlib.import_module() at runtime, so without
+collect_submodules the packaged exe dies on `import pynput.keyboard` instead.
+See docs/superpowers/specs/2026-07-30-standalone-executables-design.md.
 """
 
 import os
@@ -18,7 +21,10 @@ a = Analysis(
     pathex=[os.path.join(SPECPATH, "..", "..", "src")],
     binaries=[],
     datas=[],
-    hiddenimports=collect_submodules("keyring.backends"),
+    hiddenimports=[
+        *collect_submodules("keyring.backends"),
+        *collect_submodules("pynput"),
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
