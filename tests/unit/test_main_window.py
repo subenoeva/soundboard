@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QDialog, QWidget
 
 from soundboard.hotkeys import FakeHotkeyManager
 from soundboard.library.cache import SoundCache
@@ -12,7 +13,8 @@ from soundboard.remote import sounds
 from soundboard.remote.fake_client import FakeRemoteClient
 from soundboard.ui.clip_button import ClipState
 from soundboard.ui.layout_store import Cell, GridLayout, LocalSource, RemoteSource
-from soundboard.ui.main_window import MainWindow
+from soundboard.ui.library_dialog import LibraryDialog
+from soundboard.ui.main_window import MainWindow, _default_pick_library_sound
 
 
 class _RecordingEngine:
@@ -381,3 +383,43 @@ def test_assign_from_library_on_an_occupied_cell_does_nothing(
     cell = window._cell_at(0)
     assert cell is not None
     assert cell.source == RemoteSource(id="existing")
+
+
+def test_default_pick_library_sound_returns_the_selected_sound(
+    qtbot: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = FakeRemoteClient()
+
+    def _fake_exec(self: LibraryDialog) -> int:
+        self.selected_id = "sound-id"
+        self.selected_name = "applause"
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(LibraryDialog, "exec", _fake_exec)
+
+    parent = QWidget()
+    qtbot.addWidget(parent)
+
+    result = _default_pick_library_sound(parent, client)
+
+    assert result == ("sound-id", "applause")
+    # Let the LibraryDialog's deferred QTimer.singleShot(0, self._load) fire while
+    # `parent` (and thus the dialog it owns) is still a live local, instead of
+    # after the test returns and pytest-qt's own event pump finds it garbage
+    # collected out from under it.
+    qtbot.wait(10)
+
+
+def test_default_pick_library_sound_returns_none_when_cancelled(
+    qtbot: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = FakeRemoteClient()
+    monkeypatch.setattr(LibraryDialog, "exec", lambda self: QDialog.DialogCode.Rejected)
+
+    parent = QWidget()
+    qtbot.addWidget(parent)
+
+    result = _default_pick_library_sound(parent, client)
+
+    assert result is None
+    qtbot.wait(10)
