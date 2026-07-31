@@ -161,9 +161,11 @@ uv run soundboard gui
 La primera vez pide iniciar sesión (si no había una guardada) y elegir micrófono, cable
 virtual y tamaño de la rejilla; las siguientes veces reusa esa configuración desde
 `<config>/soundboard/ui_layout.json`. Un clic dispara la celda; arrastrar un archivo de
-audio sobre una celda vacía la asigna; clic derecho permite asignar un atajo de teclado
-o vaciar la celda. Cerrar la ventana la minimiza a la bandeja del sistema — "Salir" desde
-ahí (o desde el menú de la ventana) corta el motor de audio de verdad.
+audio sobre una celda vacía lo sube y lo comparte en la biblioteca; clic derecho permite
+asignar un atajo de teclado, asignar un sonido que ya compartió otra persona ("Asignar
+desde biblioteca") o vaciar la celda. Cerrar la ventana la minimiza a la bandeja del
+sistema — "Salir" desde ahí (o desde el menú de la ventana) corta el motor de audio de
+verdad.
 
 Los atajos de teclado funcionan incluso sin que la ventana tenga el foco, salvo en
 Linux con Wayland, donde los atajos globales no funcionan por diseño del protocolo.
