@@ -17,7 +17,8 @@ from soundboard.hotkeys import FakeHotkeyManager
 from soundboard.library.cache import SoundCache
 from soundboard.remote.fake_client import FakeRemoteClient
 from soundboard.ui.controller import AppController
-from soundboard.ui.layout_store import GridLayout, save_layout
+from soundboard.ui.grid_model import GridModel
+from soundboard.ui.layout_store import Cell, GridLayout, LocalSource, load_layout, save_layout
 
 
 class FakeStore:
@@ -146,7 +147,81 @@ def test_settings_round_trip_and_stop_all(tmp_path: Path, qtbot: object) -> None
     controller.cancel_settings()
     assert controller.view == "board"  # type: ignore[comparison-overlap]
     controller.apply_devices("mic2", "out2", 3, 3)
-    assert engines[0].stopped  # el engine anterior se apagó
+    assert engines[0].stopped  # the engine that was running got shut down
     assert controller.view == "board"  # type: ignore[comparison-overlap]
     controller.stop_all()
     assert engines[-1].stop_all_called
+
+
+def test_shrinking_the_grid_discards_the_pads_that_no_longer_fit(
+    tmp_path: Path, qtbot: object
+) -> None:
+    controller, client, _ = make_controller(tmp_path)
+    client.sign_up("user@example.com", "password")
+    controller.bootstrap()
+    controller.log_in("user@example.com", "password")
+    controller.apply_devices("mic", "out", 4, 6)
+    grid = controller.gridModel
+    assert isinstance(grid, GridModel)
+    grid.assign_remote(20, "sound-id-1", "airhorn")
+    grid.set_shortcut(20, "<ctrl>+<alt>+9")
+
+    messages: list[str] = []
+    controller.toast.connect(messages.append)
+    controller.apply_devices("mic", "out", 2, 3)
+
+    # Cell 20 has no pad on a 2x3 board: keeping it would leave a global shortcut
+    # firing with nothing on screen to clear or rebind it.
+    saved = load_layout(tmp_path / "layout.json")
+    assert saved is not None
+    assert saved.cells == []
+    assert messages == ["Se descartaron 1 pads fuera de la nueva grilla"]
+
+
+def test_failed_device_change_keeps_the_last_working_layout_on_disk(
+    tmp_path: Path, qtbot: object
+) -> None:
+    engines: list[FakeEngine] = []
+
+    def factory(layout):  # type: ignore[no-untyped-def]
+        if layout.mic == "broken":
+            raise RuntimeError("no such device")
+        engines.append(FakeEngine())
+        return engines[-1]
+
+    controller, client, _ = make_controller(tmp_path, engine_factory=factory)
+    client.sign_up("user@example.com", "password")
+    controller.bootstrap()
+    controller.log_in("user@example.com", "password")
+    controller.apply_devices("mic", "out", 2, 3)
+
+    controller.apply_devices("broken", "out", 2, 3)
+
+    assert controller.view == "setup"  # type: ignore[comparison-overlap]
+    # The next cold start must find the configuration that worked, not the one that
+    # just failed — otherwise a bad pick costs the user their working setup.
+    saved = load_layout(tmp_path / "layout.json")
+    assert saved is not None
+    assert saved.mic == "mic"
+    assert controller.micName == "mic"  # type: ignore[comparison-overlap]
+
+
+def test_a_cell_left_over_from_a_bigger_grid_is_dropped_on_the_next_change(
+    tmp_path: Path, qtbot: object
+) -> None:
+    save_layout(
+        tmp_path / "layout.json",
+        GridLayout(
+            rows=2, cols=3, mic="m", out="o", blocksize=256,
+            cells=[Cell(index=9, source=LocalSource(path="a.wav"), name="ghost")],
+        ),
+    )
+    controller, client, store = make_controller(tmp_path)
+    store.save(client.sign_in_as_new_user("user@example.com"))
+    controller.bootstrap()
+
+    controller.apply_devices("mic", "out", 2, 3)
+
+    saved = load_layout(tmp_path / "layout.json")
+    assert saved is not None
+    assert saved.cells == []

@@ -86,6 +86,9 @@ def run_gui(
     engine.rootContext().setContextProperty("App", controller)
     engine.load(str(qml_root() / "Main.qml"))
     if not engine.rootObjects():
+        # bootstrap() may already have opened the audio devices and the hotkey hook;
+        # bailing out without shutdown() leaves both running until the interpreter dies.
+        controller.shutdown()
         QMessageBox.critical(None, "Error de interfaz", "No se pudo cargar la interfaz")
         return 1
     window = cast(QQuickWindow, engine.rootObjects()[0])

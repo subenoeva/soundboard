@@ -9,6 +9,7 @@ something it can bind to and that reacts to state changes after construction.
 from __future__ import annotations
 
 from collections.abc import Callable
+from copy import deepcopy
 from pathlib import Path
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
@@ -21,7 +22,12 @@ from soundboard.remote.models import RemoteClient, Session
 from soundboard.ui.engine_bridge import EngineBridge
 from soundboard.ui.engine_factory import Engine, Store, build_engine
 from soundboard.ui.grid_model import GridModel
-from soundboard.ui.layout_store import GridLayout, load_layout, save_layout
+from soundboard.ui.layout_store import (
+    GridLayout,
+    load_layout,
+    save_layout,
+    trim_cells_to_bounds,
+)
 from soundboard.ui.library_model import LibraryModel
 
 _DEFAULT_ROWS = 4
@@ -136,15 +142,28 @@ class AppController(QObject):
 
     @Slot(str, str, int, int)
     def apply_devices(self, mic: str, out: str, rows: int, cols: int) -> None:
+        previous = deepcopy(self._layout)
+        self._teardown_engine()
         if self._layout is None:
             self._layout = GridLayout(rows=rows, cols=cols, mic=mic, out=out, blocksize=256)
         else:
             self._layout.mic, self._layout.out = mic, out
             self._layout.rows, self._layout.cols = rows, cols
-        save_layout(self._layout_path, self._layout)
+        discarded = trim_cells_to_bounds(self._layout)
         self.devicesChanged.emit()
-        self._teardown_engine()
-        self._start_engine()
+        if not self._start_engine():
+            # The engine that was running is already gone and the new devices don't
+            # work: keep the last configuration that did on disk (and in the setup
+            # form) instead of persisting a layout that boots straight back to setup.
+            if previous is not None:
+                self._layout = previous
+            self.devicesChanged.emit()
+            return
+        save_layout(self._layout_path, self._layout)
+        if discarded:
+            self.toast.emit(
+                f"Se descartaron {len(discarded)} pads fuera de la nueva grilla"
+            )
 
     @Slot()
     def open_settings(self) -> None:
@@ -162,7 +181,7 @@ class AppController(QObject):
 
     # -- engine lifecycle ------------------------------------------------------------
 
-    def _start_engine(self) -> None:
+    def _start_engine(self) -> bool:
         assert self._layout is not None and self._session is not None
         try:
             engine = self._engine_factory(self._layout)
@@ -170,7 +189,7 @@ class AppController(QObject):
             self._setup_error = str(exc)
             self.setupErrorChanged.emit()
             self._set_view("setup")
-            return
+            return False
         self._engine = engine
         self._setup_error = ""
         self.setupErrorChanged.emit()
@@ -185,16 +204,29 @@ class AppController(QObject):
         self.gridModelChanged.emit()
         self.bridgeChanged.emit()
         self._set_view("board")
+        return True
 
     def _teardown_engine(self) -> None:
+        """Retire the whole engine/model stack, leaving nothing that can still act.
+
+        Both models are parented to this controller, so clearing the attribute only
+        drops the Python reference — the C++ object stays alive and functional. They
+        are detached (so in-flight work is ignored) and notified as gone before the
+        deferred delete, which only runs once QML has rebound off them.
+        """
         if self._bridge is not None:
-            self._bridge.stop()
-            self._bridge = None
+            bridge, self._bridge = self._bridge, None
+            bridge.stop()
             self.bridgeChanged.emit()
+            bridge.deleteLater()
+        # Drops every combo registered on the OS hook; the next GridModel registers
+        # the shortcuts of the cells it actually shows, from scratch.
+        self._hotkeys.stop()
         if self._grid is not None:
-            self._grid = None
+            grid, self._grid = self._grid, None
+            grid.detach()
             self.gridModelChanged.emit()
-        self._hotkeys.stop()  # el GridModel nuevo re-registra los atajos de sus celdas
+            grid.deleteLater()
         if self._engine is not None:
             self._engine.stop()
             self._engine = None

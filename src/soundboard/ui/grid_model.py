@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from functools import partial
 from pathlib import Path
 from typing import Any, Protocol
@@ -41,6 +42,12 @@ STATE_PLAYING = "playing"
 
 
 class Engine(Protocol):
+    """Playback-only view of the engine, kept narrow so a fake stays small.
+
+    Not the same protocol as ``engine_factory.Engine``, which is the wide one (it
+    also covers what ``EngineBridge`` polls); a real ``AudioEngine`` satisfies both.
+    """
+
     def play(
         self,
         pcm: np.ndarray,
@@ -90,17 +97,33 @@ class GridModel(QAbstractListModel):
         self._progress: dict[int, float] = {}
         self._voice_by_cell: dict[int, int] = {}
         self._active_workers: set[Worker] = set()
+        self._detached = False
         self._hotkey_pressed.connect(self.play)
         for cell in layout.cells:
-            if cell.shortcut:
+            # A cell left outside the grid by an older build gets no hotkey: it has
+            # no pad, so a shortcut for it would play with no visible source.
+            if cell.shortcut and cell.index < layout.rows * layout.cols:
                 self._hotkeys.register(
                     cell.shortcut, partial(self._hotkey_pressed.emit, cell.index)
                 )
 
+    def detach(self) -> None:
+        """Retire this model: ignore anything still in flight.
+
+        Dropping the owner's reference is not enough. The model is parented to
+        ``AppController``, so its C++ half outlives a device hot-swap, and it shares
+        the ``GridLayout`` instance with its replacement — an upload or a queued
+        hotkey landing afterwards would edit the live layout and rewrite layout.json
+        behind the visible model's back. Every path that can still fire (the worker
+        callbacks via ``dispatch_worker``'s ``is_live``, and ``play``) checks this.
+        Its shortcuts die with the ``HotkeyManager.stop()`` the owner pairs this with.
+        """
+        self._detached = True
+
     @Slot(int)
     def play(self, index: int) -> None:
         cell = self._cell_at(index)
-        if cell is None:
+        if self._detached or cell is None:
             return
         if isinstance(cell.source, LocalSource):
             try:
@@ -121,25 +144,22 @@ class GridModel(QAbstractListModel):
     def _play_remote(self, index: int, source: RemoteSource) -> None:
         self._states[index] = STATE_LOADING
         self._emit_row_changed(index, [self.STATE_ROLE])
-
-        def resolve() -> np.ndarray:
-            sound = sounds.get_sound(self._client, source.id)
-            return sounds.resolve_pcm(self._client, self._cache, sound)
-
+        resolve = partial(sounds.resolve_pcm_by_id, self._client, self._cache, source.id)
         dispatch_worker(
             self._active_workers, DownloadWorker(resolve), index,
-            self._on_pcm_ready, self._on_pcm_failed,
+            self._on_pcm_ready, self._on_pcm_failed, is_live=self._is_live,
         )
 
-    def _on_pcm_ready(self, index: int, worker: Worker, pcm: np.ndarray) -> None:
-        self._active_workers.discard(worker)
+    def _is_live(self) -> bool:
+        return not self._detached
+
+    def _on_pcm_ready(self, index: int, pcm: np.ndarray) -> None:
         self._track_voice(index, self._engine.play(pcm))
 
-    def _on_pcm_failed(self, index: int, worker: Worker, message: str) -> None:
-        self._active_workers.discard(worker)
+    def _on_pcm_failed(self, index: int, message: str) -> None:
         self._states[index] = STATE_IDLE
         self._emit_row_changed(index, [self.STATE_ROLE])
-        self.toast.emit(f"error: {message}")
+        self.toast.emit(f"No se pudo reproducir: {message}")
 
     def apply_voice_states(self, states: list[tuple[int, float]]) -> None:
         """Called by EngineBridge with the engine's (voice_id, progress) snapshot."""
@@ -168,23 +188,16 @@ class GridModel(QAbstractListModel):
         name = Path(path).stem
         self._states[index] = STATE_LOADING
         self._emit_row_changed(index, [self.STATE_ROLE])
-
-        def upload() -> Sound:
-            return sounds.add_sound(self._client, self._session, path, name=name)
-
+        upload = partial(sounds.add_sound, self._client, self._session, path, name=name)
         dispatch_worker(
             self._active_workers, UploadWorker(upload), index,
-            self._on_upload_ready, self._on_upload_failed,
+            self._on_upload_ready, self._on_upload_failed, is_live=self._is_live,
         )
 
-    def _on_upload_ready(self, index: int, worker: Worker, sound: Sound) -> None:
-        self._active_workers.discard(worker)
-        self._set_cell(
-            Cell(index=index, source=RemoteSource(id=sound.id), name=sound.name)
-        )
+    def _on_upload_ready(self, index: int, sound: Sound) -> None:
+        self._set_cell(Cell(index=index, source=RemoteSource(id=sound.id), name=sound.name))
 
-    def _on_upload_failed(self, index: int, worker: Worker, message: str) -> None:
-        self._active_workers.discard(worker)
+    def _on_upload_failed(self, index: int, message: str) -> None:
         self._states.pop(index, None)
         self._emit_row_changed(index, [self.STATE_ROLE])
         self.toast.emit(f"No se pudo subir el sonido: {message}")
@@ -198,7 +211,7 @@ class GridModel(QAbstractListModel):
     @Slot(int)
     def clear_cell(self, index: int) -> None:
         cell = self._cell_at(index)
-        if cell is None:
+        if self._detached or cell is None:
             return
         if cell.shortcut:
             self._hotkeys.unregister(cell.shortcut)
@@ -212,7 +225,7 @@ class GridModel(QAbstractListModel):
     @Slot(int, str)
     def set_shortcut(self, index: int, combo: str) -> None:
         cell = self._cell_at(index)
-        if cell is None:
+        if self._detached or cell is None:
             return
         if combo:
             try:
@@ -222,32 +235,18 @@ class GridModel(QAbstractListModel):
                 return
         if cell.shortcut:
             self._hotkeys.unregister(cell.shortcut)
-        self._set_cell(
-            Cell(
-                index=cell.index,
-                source=cell.source,
-                name=cell.name,
-                shortcut=combo or None,
-                color=cell.color,
-            )
-        )
+        self._set_cell(replace(cell, shortcut=combo or None))
 
     @Slot(int, str)
     def set_color(self, index: int, color: str) -> None:
         cell = self._cell_at(index)
-        if cell is None:
+        if self._detached or cell is None:
             return
-        self._set_cell(
-            Cell(
-                index=cell.index,
-                source=cell.source,
-                name=cell.name,
-                shortcut=cell.shortcut,
-                color=color or None,
-            )
-        )
+        self._set_cell(replace(cell, color=color or None))
 
     def _set_cell(self, cell: Cell) -> None:
+        if self._detached:
+            return
         self._layout.cells = [c for c in self._layout.cells if c.index != cell.index] + [cell]
         self._states[cell.index] = STATE_IDLE
         save_layout(self._layout_path, self._layout)

@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 import pytest
 import soundfile as sf
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QThreadPool, QUrl
 
 from soundboard.hotkeys import FakeHotkeyManager
 from soundboard.library.cache import SoundCache
@@ -97,7 +97,19 @@ def test_saved_shortcuts_are_registered_at_init(
 ) -> None:
     cell = Cell(index=0, source=LocalSource(path="a.wav"), name="a", shortcut="<ctrl>+1")
     _model, _, _ = make_model(tmp_path, hotkeys, cells=[cell])
-    hotkeys.trigger("<ctrl>+1")  # no debe lanzar KeyError
+    hotkeys.trigger("<ctrl>+1")  # must not raise KeyError
+
+
+def test_shortcut_of_a_cell_outside_the_grid_is_not_registered(
+    tmp_path: Path, hotkeys: FakeHotkeyManager
+) -> None:
+    # Cell 20 does not fit the 2x3 grid: no pad shows it, so a hotkey for it would
+    # play with no visible source and could never be cleared from the UI.
+    cell = Cell(index=20, source=LocalSource(path="a.wav"), name="ghost",
+                shortcut="<ctrl>+<alt>+9")
+    _model, _, _ = make_model(tmp_path, hotkeys, cells=[cell])
+    with pytest.raises(KeyError):
+        hotkeys.trigger("<ctrl>+<alt>+9")
 
 
 def test_play_local_cell_plays_and_tracks_voice(
@@ -290,6 +302,71 @@ def test_set_shortcut_invalid_combo_toasts_and_keeps_cell(
     model.set_shortcut(0, "not-a-combo")
     assert messages
     assert layout.cells[0].shortcut is None
+
+
+def _drain_workers(model: GridModel, qtbot: Any) -> None:
+    """Let every dispatched worker finish and its queued signal reach the model.
+
+    The worker's ``finished`` signal is queued to the Qt thread, so it cannot be
+    delivered while a test holds that thread: ``waitForDone`` returns with the result
+    still sitting in the event queue, and ``waitUntil`` then spins the loop to deliver
+    it. That is what lets these tests detach *after* the work is done but *before* it
+    lands — exactly the hot-swap window.
+    """
+    assert QThreadPool.globalInstance().waitForDone(5000)
+    qtbot.waitUntil(lambda: not model._active_workers, timeout=2000)
+
+
+def test_detached_model_ignores_an_upload_that_lands_after_teardown(
+    tmp_path: Path, hotkeys: FakeHotkeyManager, qtbot: Any
+) -> None:
+    wav = make_wav(tmp_path / "airhorn.wav")
+    model, _engine, layout = make_model(tmp_path, hotkeys)
+
+    model.assign_local(0, str(wav))
+    model.detach()
+    _drain_workers(model, qtbot)
+
+    # The replacement model was built over this same layout: the retired one must not
+    # assign the cell behind its back, nor rewrite layout.json.
+    assert layout.cells == []
+    assert not (tmp_path / "layout.json").exists()
+
+
+def test_detached_model_does_not_play_a_download_that_lands_after_teardown(
+    tmp_path: Path, hotkeys: FakeHotkeyManager, qtbot: Any
+) -> None:
+    client = FakeRemoteClient()
+    session = client.sign_in_as_new_user("user@example.com")
+    sound = sounds.add_sound(client, session, str(make_wav(tmp_path / "a.wav")), name="laugh")
+    engine = FakeEngine()
+    layout = GridLayout(
+        rows=1, cols=1, mic="m", out="o", blocksize=256,
+        cells=[Cell(index=0, source=RemoteSource(id=sound.id), name="laugh")],
+    )
+    model = GridModel(engine, client, session, SoundCache(tmp_path / "cache"), hotkeys,
+                      layout, tmp_path / "layout.json")
+
+    model.play(0)
+    model.detach()
+    _drain_workers(model, qtbot)
+
+    # The engine this model was built on is stopped; play() would queue a command no
+    # callback will ever drain — silence with no error, instead of nothing at all.
+    assert engine.played == []
+
+
+def test_detached_model_ignores_a_hotkey_that_lands_after_teardown(
+    tmp_path: Path, hotkeys: FakeHotkeyManager
+) -> None:
+    wav = make_wav(tmp_path / "a.wav")
+    cell = Cell(index=0, source=LocalSource(path=str(wav)), name="a")
+    model, engine, _ = make_model(tmp_path, hotkeys, cells=[cell])
+
+    model.detach()
+    model.play(0)
+
+    assert engine.played == []
 
 
 def test_set_color_persists_and_clears(

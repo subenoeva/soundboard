@@ -11,6 +11,7 @@ from soundboard.ui.layout_store import (
     default_layout_path,
     load_layout,
     save_layout,
+    trim_cells_to_bounds,
 )
 
 
@@ -70,6 +71,29 @@ def test_cell_color_round_trips(tmp_path: Path) -> None:
     assert loaded is not None
     assert loaded.cells[0].color == "#e8590c"
     assert loaded.cells[1].color is None
+
+
+def test_trim_cells_to_bounds_drops_cells_the_grid_no_longer_has_room_for() -> None:
+    layout = GridLayout(rows=2, cols=3, mic="m", out="o", blocksize=256)
+    layout.cells = [
+        Cell(index=0, source=LocalSource(path="a.wav"), name="a"),
+        Cell(index=5, source=LocalSource(path="b.wav"), name="b"),
+        Cell(index=6, source=LocalSource(path="c.wav"), name="c"),
+        Cell(index=20, source=LocalSource(path="d.wav"), name="d", shortcut="<ctrl>+<alt>+9"),
+    ]
+
+    dropped = trim_cells_to_bounds(layout)
+
+    assert [cell.name for cell in dropped] == ["c", "d"]
+    assert [cell.index for cell in layout.cells] == [0, 5]
+
+
+def test_trim_cells_to_bounds_keeps_a_fitting_layout_untouched() -> None:
+    cells = [Cell(index=3, source=LocalSource(path="a.wav"), name="a")]
+    layout = GridLayout(rows=2, cols=2, mic="m", out="o", blocksize=256, cells=cells)
+
+    assert trim_cells_to_bounds(layout) == []
+    assert layout.cells is cells
 
 
 def test_legacy_layout_without_color_loads(tmp_path: Path) -> None:

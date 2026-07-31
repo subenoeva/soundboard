@@ -48,6 +48,20 @@ class GridLayout:
     cells: list[Cell] = field(default_factory=list)
 
 
+def trim_cells_to_bounds(layout: GridLayout) -> list[Cell]:
+    """Drop the cells outside ``rows * cols``, in place; return the dropped ones.
+
+    A cell the grid no longer has room for is unreachable: no pad renders it, so it
+    can never be cleared or re-bound, yet its global shortcut would keep firing and
+    it would survive in the saved layout forever. Shrinking the grid discards it.
+    """
+    capacity = layout.rows * layout.cols
+    dropped = [cell for cell in layout.cells if cell.index >= capacity]
+    if dropped:
+        layout.cells = [cell for cell in layout.cells if cell.index < capacity]
+    return dropped
+
+
 def _source_to_dict(source: CellSource) -> dict[str, Any]:
     if isinstance(source, LocalSource):
         return {"type": "local", "path": source.path}
