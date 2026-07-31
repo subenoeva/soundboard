@@ -12,6 +12,17 @@ from soundboard.ui import app as app_module
 from soundboard.ui.app import run_gui
 from soundboard.ui.layout_store import GridLayout, save_layout
 from soundboard.ui.login_dialog import LoginDialog
+from soundboard.ui.main_window import MainWindow
+
+
+def _make_spy_main_window(captured: list[object]) -> Any:
+    """Build a MainWindow stand-in that records the session it was constructed with."""
+
+    def _spy(engine: Any, client_arg: Any, session_arg: Any, *rest: Any, **kwargs: Any) -> Any:
+        captured.append(session_arg)
+        return MainWindow(engine, client_arg, session_arg, *rest, **kwargs)
+
+    return _spy
 
 
 class _DictKeyringBackend:
@@ -165,13 +176,7 @@ def test_run_gui_passes_the_restored_session_to_the_main_window(
     )
     monkeypatch.setattr(app_module, "default_layout_path", lambda: layout_path)
     captured: list[object] = []
-    real_main_window = app_module.MainWindow  # type: ignore[attr-defined]
-
-    def _spy_main_window(engine: Any, client_arg: Any, session_arg: Any, *rest: Any, **kwargs: Any) -> Any:
-        captured.append(session_arg)
-        return real_main_window(engine, client_arg, session_arg, *rest, **kwargs)
-
-    monkeypatch.setattr(app_module, "MainWindow", _spy_main_window)
+    monkeypatch.setattr(app_module, "MainWindow", _make_spy_main_window(captured))
 
     exit_code = run_gui(
         client=client, store=store, backend=FakeBackend(), hotkeys=FakeHotkeyManager(),
@@ -202,13 +207,7 @@ def test_run_gui_passes_the_freshly_logged_in_session_to_the_main_window(
     monkeypatch.setattr(LoginDialog, "exec", _fake_exec)
 
     captured: list[object] = []
-    real_main_window = app_module.MainWindow  # type: ignore[attr-defined]
-
-    def _spy_main_window(engine: Any, client_arg: Any, session_arg: Any, *rest: Any, **kwargs: Any) -> Any:
-        captured.append(session_arg)
-        return real_main_window(engine, client_arg, session_arg, *rest, **kwargs)
-
-    monkeypatch.setattr(app_module, "MainWindow", _spy_main_window)
+    monkeypatch.setattr(app_module, "MainWindow", _make_spy_main_window(captured))
 
     exit_code = run_gui(
         client=client, store=store, backend=FakeBackend(), hotkeys=FakeHotkeyManager(),
