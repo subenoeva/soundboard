@@ -1,9 +1,9 @@
 """AppController: owns the session, the engine lifecycle and view navigation.
 
-The QML front end binds to a single instance of this class. It plays the role
-`app.py::run_gui` and `MainWindow` played for the QWidgets UI, but as a persistent
-object with notify signals instead of a one-shot startup function — QML needs
-something it can bind to and that reacts to state changes after construction.
+The QML front end binds to a single instance of this class, exposed as the `App`
+context property. It is a persistent object with notify signals rather than a
+one-shot startup function, because QML needs something it can bind to and that
+reacts to state changes after construction.
 """
 
 from __future__ import annotations

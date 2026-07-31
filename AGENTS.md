@@ -130,8 +130,9 @@ PySide6, or `pynput`. `ui/` and `hotkeys.py` may import `audio/`, `remote/`, `li
   device), `supabase` (local Supabase stack via `supabase start`, needs the Supabase CLI +
   Docker), `display` (real OS keyboard hook; also needs Xvfb on headless Linux).
 - `tests/unit/conftest.py` forces `QT_QPA_PLATFORM=offscreen` before the first
-  `QApplication` is constructed — widget tests never need a real display (except
-  `display`-marked ones).
+  `QApplication` is constructed — Qt tests never need a real display (except
+  `display`-marked ones). On Windows it also registers the PySide6 package directory
+  via `os.add_dll_directory` so the QML plugin DLLs resolve.
 - Every layer with a real external dependency sits behind a protocol with an in-memory
   double for tests: `AudioBackend`/`FakeBackend`, `RemoteClient`/`FakeRemoteClient`,
   `HotkeyManager`/`FakeHotkeyManager`.

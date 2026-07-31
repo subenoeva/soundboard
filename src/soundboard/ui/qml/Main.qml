@@ -15,10 +15,10 @@ ApplicationWindow {
 
     onClosing: (close) => {
         if (App.view === "login") {
-            Qt.quit()          // sin sesión no hay nada que conservar en la bandeja
+            Qt.quit()          // no session, so nothing worth keeping in the tray
         } else {
             close.accepted = false
-            root.hide()        // la bandeja mantiene vivo el motor de audio
+            root.hide()        // the tray keeps the audio engine alive
         }
     }
 
