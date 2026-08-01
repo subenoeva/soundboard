@@ -1,6 +1,6 @@
 [project]
 name = "soundboard"
-version = "0.4.1"
+version = "0.4.2"
 description = "Cross-platform soundboard that feeds clips and your microphone into a virtual input device"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
