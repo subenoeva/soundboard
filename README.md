@@ -62,7 +62,14 @@ Platform caveats:
 - **Linux** — the PipeWire/PulseAudio null sink still has to be configured by hand.
   Global hotkeys do not work under Wayland (protocol design, not a bug). Saving the
   session needs a running secret service — make sure `gnome-keyring` or `kwalletd` is
-  active.
+  active. The AppImage bundles Qt and PortAudio but not the X11 and ALSA client
+  libraries underneath them, which a desktop install normally already has. On a minimal
+  system, Qt fails with *could not load the Qt platform plugin "xcb"*; install them with:
+
+  ```bash
+  sudo apt install libasound2t64 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 \
+      libxcb-xkb1 libxkbcommon-x11-0
+  ```
 
 ### Updates
 

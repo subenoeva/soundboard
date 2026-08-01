@@ -100,27 +100,49 @@ jobs:
         run: |
           chmod +x packaging/linux/AppRun packaging/linux/build_appimage.sh
           packaging/linux/build_appimage.sh "soundboard-${{ env.TAG }}-linux-x86_64.AppImage"
-      # Same reason as the Windows job. xvfb because pynput picks an X11 backend at
-      # import time and raises without a display, even though Qt itself runs offscreen;
-      # extract-and-run because the runner has no FUSE.
+      # Same reason as the Windows job. xvfb because pynput picks an X11 backend at import
+      # time and raises without a display; extract-and-run because the runner has no FUSE.
+      # The GUI deliberately runs on xcb rather than offscreen, so the platform and image
+      # plugins are actually loaded and the check below has something to look at.
       - name: Smoke test the AppImage
         env:
-          QT_QPA_PLATFORM: offscreen
           APPIMAGE_EXTRACT_AND_RUN: "1"
         run: |
           APP="./soundboard-${{ env.TAG }}-linux-x86_64.AppImage"
           chmod +x "$APP"
-          "$APP" devices
-          xvfb-run -a "$APP" &
+          QT_QPA_PLATFORM=offscreen "$APP" devices
+          QT_DEBUG_PLUGINS=1 xvfb-run -a "$APP" >qt.log 2>&1 &
           PID=$!
           sleep 30
           if ! kill -0 "$PID" 2>/dev/null; then
             echo "AppImage exited early — the Qt/QML stack failed to load" >&2
-            wait "$PID"
+            wait "$PID" || true
+            cat qt.log >&2
             exit 1
           fi
           kill "$PID"
-          echo "AppImage starts and stays up"
+          # A grep that finds nothing proves nothing unless the log it read has the plugin
+          # loader in it, so check the probe ran before trusting its silence.
+          if ! grep -q "plugin.factoryloader" qt.log; then
+            echo "QT_DEBUG_PLUGINS produced no plugin log — the check below never ran" >&2
+            exit 1
+          fi
+          # A plugin whose Qt library packaging/qt_prune.py removed fails inside dlopen,
+          # and Qt carries on without it — the app starts, stays up, and ships broken.
+          # v0.4.3 went out with three of these. QT_DEBUG_PLUGINS is the only thing that
+          # says so out loud, and on Linux the message names the library that is gone.
+          #
+          # There is no counterpart in the Windows job: that binary is built --windowed,
+          # so it has no stdout or stderr to write this log to (Qt falls back to the
+          # debugger), and the message there does not name the missing DLL anyway. What
+          # covers Windows is tests/unit/test_packaging_qt_prune.py, which asserts both
+          # file-name spellings of every pruned plugin.
+          if grep -q "cannot load:.*libQt6" qt.log; then
+            echo "a bundled Qt plugin lost its library to the prune:" >&2
+            grep "cannot load:.*libQt6" qt.log >&2
+            exit 1
+          fi
+          echo "AppImage starts, stays up, and every Qt plugin it ships can load"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
