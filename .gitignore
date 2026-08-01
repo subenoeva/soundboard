@@ -23,4 +23,8 @@ src/soundboard/_baked_defaults.py
 scratch/
 *.f32
 
+# Designs and plans stay out of the checkout (see AGENTS.md); keeping them here
+# rather than elsewhere on disk is only so they sit next to the code they describe.
+docs/
+
 .idea/
