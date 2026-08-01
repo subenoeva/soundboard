@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.6](https://github.com/subenoeva/soundboard/compare/v0.4.5...v0.4.6) (2026-08-01)
+
+
+### Bug Fixes
+
+* build the AppImage against the full set of libraries it bundles ([#30](https://github.com/subenoeva/soundboard/issues/30)) ([2ed38c3](https://github.com/subenoeva/soundboard/commit/2ed38c33926176af18416e4e4e765bf7ec734df2))
+
 ## [0.4.5](https://github.com/subenoeva/soundboard/compare/v0.4.4...v0.4.5) (2026-08-01)
 
 
