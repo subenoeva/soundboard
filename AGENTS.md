@@ -45,6 +45,18 @@ Layered, with the real-time audio core kept isolated from anything that does I/O
   never do I/O, logging, `queue.Queue`, or non-trivial allocation — numpy vector ops only.
   Internal format is fixed: 48kHz mono float32. Tested without hardware via the
   `AudioBackend` protocol + `FakeBackend` (simulated clock, deterministic).
+- **`effects/`** — the microphone effects chain, at the same layer as `audio/` and running
+  on the same callback thread, so every rule above applies to it too. `chain.py` (the
+  `Effect` protocol and `EffectChain`: ordered slots, in-place `process()`, per-block
+  bypass, latency as the sum of the enabled blocks), `params.py` (`ParamSpec` — the
+  parameter panel is generated from descriptors, never written per effect, which is what
+  lets an arbitrary VST3 appear with working sliders), `pedal.py` (one pedalboard plugin
+  behind the protocol) and `registry.py` (the built-in blocks, with defaults chosen for a
+  voice rather than pedalboard's own). The engine swaps chains through the same command
+  deque `play`/`stop_all` use and hands the outgoing one back through `drain_retired()`:
+  releasing a plugin or an ONNX session on the callback thread is not allowed. Persistence
+  is `ui/effects_store.py`, beside `ui_layout.json`; an entry that will not build is kept
+  as a row carrying its error, never dropped.
 - **`remote/`** — the Supabase-backed shared sound library. `RemoteClient` is the seam
   between library logic and the backend (`SupabaseRemoteClient` real,
   `FakeRemoteClient` in-memory for tests — the same role `AudioBackend` plays for audio).
@@ -105,11 +117,26 @@ Layered, with the real-time audio core kept isolated from anything that does I/O
   Imports `soundboard.ui.app` lazily, only inside the `gui` branch, so headless CLI usage
   never pulls in PySide6.
 
-Dependency direction: nothing under `audio/` may import `ui/`, `hotkeys.py`, `remote/`,
-PySide6, or `pynput`. `ui/` and `hotkeys.py` may import `audio/`, `remote/`, `library/`,
-`updater/`. `updater/` imports none of the others (it duplicates the `settings.json` path
-helper rather than reach into `remote/`). `ui/` is the only importer of PySide6;
-`hotkeys.py` is the only importer of `pynput`.
+Dependency direction: nothing under `audio/` or `effects/` may import `ui/`, `hotkeys.py`,
+`remote/`, PySide6, or `pynput`. `ui/` and `hotkeys.py` may import `audio/`, `effects/`,
+`remote/`, `library/`, `updater/`. `updater/` imports none of the others (it duplicates the
+`settings.json` path helper rather than reach into `remote/`). `ui/` is the only importer
+of PySide6; `hotkeys.py` is the only importer of `pynput`.
+
+The GIL is a shared resource with a deadline on it. The chain runs inline in the audio
+callback, and an ONNX inference releases the GIL for the compute and then has to take it
+back before the block is due; if another thread is runnable at that moment the callback
+waits for it, and on Windows that wait resolves no finer than ~15.6 ms against a 5.33 ms
+budget. **So no background work in this process may occupy the GIL for long.** There are
+two ways to break that and "it calls into C" only rules out one: a pure-Python loop
+occupies it by running bytecode, and a long C call that never releases it (`json.loads`
+over a multi-MB document is the standard example) occupies it just as effectively. What is
+safe is C that releases the GIL and then blocks — `sf.read`, `soxr`, `hashlib`, socket
+I/O, which is what every `QRunnable` here happens to do already. Anything else belongs in
+a subprocess, which brings its own GIL. Measured, with the real model on the real cadence:
+the app's own import path (`sf.read` + `soxr.resample`) is indistinguishable from an idle
+machine, while a CPU-bound Python thread puts 139 of 258 blocks over budget. No knob fixes
+it — the Windows timer-resolution mitigations were measured and rejected.
 
 ## Project conventions
 
