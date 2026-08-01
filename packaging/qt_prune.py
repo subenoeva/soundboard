@@ -59,6 +59,19 @@ PRUNED_PREFIXES: tuple[str, ...] = (
     "qt6quickcontrols2fusion",
     "qt6quickcontrols2fluentwinui3",
     "qt6quickcontrols2windows",
+    # Its only reason to exist is QtQml.LocalStorage, which links Qt6Sql (pruned above)
+    # and which nothing here imports.
+    "qt6qmllocalstorage",
+)
+
+# Plugins Qt loads with LoadLibrary at runtime, whose Qt library the prune removes. They
+# are not named Qt6*, so the prefix list above never reached them: v0.4.1 shipped all
+# four with a dangling import. A plugin that fails to load does so deep inside Qt, where
+# no traceback surfaces, which is exactly the kind of failure this project does not want.
+PRUNED_PLUGIN_FILES: tuple[str, ...] = (
+    "qpdf.dll",  # imageformats, links Qt6Pdf
+    "qtvirtualkeyboardplugin.dll",  # platforminputcontexts, links Qt6VirtualKeyboard
+    "qmldbg_quick3dprofiler.dll",  # qmltooling, links Qt6Quick3DUtils
 )
 
 # Paths under PySide6's `qml/` directory, matched as whole module trees.
@@ -83,6 +96,10 @@ PRUNED_QML_MODULES: tuple[str, ...] = (
     "Qt5Compat",
     "Qt/labs",
     "QtQml/StateMachine",
+    # PySide6 ships the LocalStorage plugin under QtQuick, not QtQml as its library name
+    # suggests; both are listed so a future reshuffle does not silently orphan it again.
+    "QtQml/LocalStorage",
+    "QtQuick/LocalStorage",
     "QtQuick/VirtualKeyboard",
     "QtQuick/Pdf",
     "QtQuick/NativeStyle",
@@ -169,6 +186,8 @@ def prune[T: Sequence[Any]](entries: Iterable[T], verify: bool = True) -> list[T
         prefix = _matched_prefix(dest)
         if prefix is not None:
             matched.add(prefix)
+            continue
+        if _library_stem(dest) in PRUNED_PLUGIN_FILES:
             continue
         if _is_pruned_qml(dest):
             continue

@@ -38,6 +38,25 @@ jobs:
               f"SUPABASE_URL = {url!r}\nSUPABASE_ANON_KEY = {key!r}\n"
           )
       - run: uv run pyinstaller packaging/windows/soundboard.spec
+      # Runs before the upload so a binary that cannot start is never published. The
+      # cleared PATH is the whole point: a frozen bundle missing a Qt DLL still starts
+      # on a machine that has PySide6 installed, because Windows resolves the import
+      # from there. v0.4.1 shipped a prune verified exactly that way.
+      - name: Smoke test the frozen binary
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $env:PATH = "$env:WINDIR\System32;$env:WINDIR"
+          & dist\soundboard.exe devices
+          if ($LASTEXITCODE -ne 0) { throw "CLI entry point exited $LASTEXITCODE" }
+          $p = Start-Process -FilePath dist\soundboard.exe -PassThru
+          Start-Sleep -Seconds 30
+          if ($p.HasExited) {
+            throw "GUI exited $($p.ExitCode) — the Qt/QML stack failed to load"
+          }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "frozen binary starts and stays up with an empty PATH"
       - name: Rename artifact to the release asset name
         shell: bash
         run: mv dist/soundboard.exe "soundboard-${{ env.TAG }}-windows.exe"
@@ -55,7 +74,7 @@ jobs:
         with:
           ref: ${{ env.TAG }}
       - name: Install PortAudio and Qt runtime libraries
-        run: sudo apt-get update && sudo apt-get install -y libportaudio2 libegl1 libxkbcommon0 libxcb-cursor0 libgl1 libdbus-1-3
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2 libegl1 libxkbcommon0 libxcb-cursor0 libgl1 libdbus-1-3 xvfb
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --group packaging
       - name: Bake Supabase config
@@ -77,6 +96,27 @@ jobs:
         run: |
           chmod +x packaging/linux/AppRun packaging/linux/build_appimage.sh
           packaging/linux/build_appimage.sh "soundboard-${{ env.TAG }}-linux-x86_64.AppImage"
+      # Same reason as the Windows job. xvfb because pynput picks an X11 backend at
+      # import time and raises without a display, even though Qt itself runs offscreen;
+      # extract-and-run because the runner has no FUSE.
+      - name: Smoke test the AppImage
+        env:
+          QT_QPA_PLATFORM: offscreen
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          APP="./soundboard-${{ env.TAG }}-linux-x86_64.AppImage"
+          chmod +x "$APP"
+          "$APP" devices
+          xvfb-run -a "$APP" &
+          PID=$!
+          sleep 30
+          if ! kill -0 "$PID" 2>/dev/null; then
+            echo "AppImage exited early — the Qt/QML stack failed to load" >&2
+            wait "$PID"
+            exit 1
+          fi
+          kill "$PID"
+          echo "AppImage starts and stays up"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
