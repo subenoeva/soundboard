@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           # A workflow run authenticated with the default GITHUB_TOKEN cannot trigger
           # other workflows — the "release: published" event release-build.yml listens
@@ -22,3 +23,29 @@ jobs:
           # RELEASE_PLEASE_TOKEN secret (manual, one-time repo setup — this workflow
           # cannot create the secret itself).
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+      # release-please rewrites the version in pyproject.toml but knows nothing about
+      # uv.lock, which pins the same version for the editable root package. Left alone
+      # the two drift apart on every single release (0.4.0 and 0.4.1 both shipped with a
+      # stale lockfile), and `uv lock --check` in CI fails on master right afterwards.
+      # Relocking on the release PR's own branch keeps the fix in the same PR that
+      # caused it instead of leaving a broken master behind.
+      - uses: actions/checkout@v4
+        if: ${{ steps.release.outputs.pr }}
+        with:
+          ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+      - uses: astral-sh/setup-uv@v5
+        if: ${{ steps.release.outputs.pr }}
+      - name: Relock uv.lock against the bumped version
+        if: ${{ steps.release.outputs.pr }}
+        run: |
+          uv lock
+          if git diff --quiet uv.lock; then
+            echo "uv.lock already matches the bumped version"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: sync uv.lock with the release version" uv.lock
+          git push
