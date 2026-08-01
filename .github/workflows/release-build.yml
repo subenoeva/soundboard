@@ -48,8 +48,12 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           $env:PATH = "$env:WINDIR\System32;$env:WINDIR"
-          & dist\soundboard.exe devices
-          if ($LASTEXITCODE -ne 0) { throw "CLI entry point exited $LASTEXITCODE" }
+          # Start-Process -Wait, not `& exe`: the binary is built --windowed, so the
+          # call operator neither waits for it nor sets $LASTEXITCODE, and the check
+          # compared an empty string against 0 and always threw.
+          $cli = Start-Process -FilePath dist\soundboard.exe -ArgumentList devices `
+            -PassThru -Wait
+          if ($cli.ExitCode -ne 0) { throw "CLI entry point exited $($cli.ExitCode)" }
           $p = Start-Process -FilePath dist\soundboard.exe -PassThru
           Start-Sleep -Seconds 30
           if ($p.HasExited) {

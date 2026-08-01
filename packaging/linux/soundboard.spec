@@ -35,6 +35,15 @@ a = Analysis(
     hiddenimports=[
         *collect_submodules("keyring.backends"),
         *collect_submodules("pynput"),
+        # collect_submodules imports pynput to enumerate it, and on a headless build
+        # runner `import pynput.keyboard` raises before the X11 backend is ever walked,
+        # so the list above comes back without it. The AppImage then died on launch
+        # under a real X server with "No module named 'pynput.keyboard._xorg'". Naming
+        # them makes the bundle independent of what the build machine happens to have.
+        "pynput.keyboard._xorg",
+        "pynput.mouse._xorg",
+        "pynput._util.xorg",
+        "pynput._util.xorg_keysyms",
         *xlib_hiddenimports,
         "PySide6.QtQml",
         "PySide6.QtQuick",

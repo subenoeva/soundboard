@@ -108,3 +108,27 @@ def test_spec_hiddenimports_includes_qtquick_modules() -> None:
     }
     required = {"PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtQuickControls2"}
     assert required <= literals, f"missing hiddenimports: {required - literals}"
+
+
+def test_spec_hiddenimports_names_the_x11_backends_explicitly() -> None:
+    """collect_submodules("pynput") imports the package to enumerate it, and on a
+    headless build runner `import pynput.keyboard` raises before the X11 backend is ever
+    seen, so the AppImage shipped without it and died on launch under a real X server:
+    `No module named 'pynput.keyboard._xorg'`. Naming them removes the dependency on
+    what the build machine happens to have."""
+    source = SPEC_PATH.read_text()
+    call = _analysis_call(source)
+    hiddenimports = _keyword_value(call, "hiddenimports")
+
+    literals = {
+        n.value
+        for n in ast.walk(hiddenimports)
+        if isinstance(n, ast.Constant) and isinstance(n.value, str)
+    }
+    required = {
+        "pynput.keyboard._xorg",
+        "pynput.mouse._xorg",
+        "pynput._util.xorg",
+        "pynput._util.xorg_keysyms",
+    }
+    assert required <= literals, f"missing hiddenimports: {required - literals}"
