@@ -62,17 +62,19 @@ Platform caveats:
 - **Linux** — the PipeWire/PulseAudio null sink still has to be configured by hand.
   Global hotkeys do not work under Wayland (protocol design, not a bug). Saving the
   session needs a running secret service — make sure `gnome-keyring` or `kwalletd` is
-  active. The AppImage bundles Qt, PortAudio and ALSA's client library, but not the X11
-  libraries Qt's `xcb` platform plugin links, nor ALSA's configuration tree (which
-  `libasound` reads from an absolute path, so no bundle can carry it). A desktop install
-  normally has both. Without them the app fails with *could not load the Qt platform
-  plugin "xcb"*, or — with the ALSA configuration missing — exits without printing
-  anything at all:
+  active. The AppImage carries Qt, its X11 client libraries, PortAudio and ALSA's client
+  library. What it cannot carry is ALSA's configuration tree, which `libasound` reads
+  from an absolute path; without it the app exits having printed nothing at all
+  ([#28](https://github.com/subenoeva/soundboard/issues/28)). Any desktop install has
+  it, a container or a minimal system may not:
 
   ```bash
-  sudo apt install libxcb-icccm4 libxcb-keysyms1 libxcb-xkb1 libxkbcommon-x11-0 \
-      libasound2-data
+  sudo apt install libasound2-data
   ```
+
+  The graphics stack — `libGL`, `libEGL`, `libdrm` and the `libwayland-*` libraries —
+  comes from the host by design, since it is tied to the driver and to the running
+  compositor.
 
 ### Updates
 
