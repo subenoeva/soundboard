@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/subenoeva/soundboard/compare/v0.4.2...v0.4.3) (2026-08-01)
+
+
+### Bug Fixes
+
+* bundle pynput's X11 backend in the AppImage ([#23](https://github.com/subenoeva/soundboard/issues/23)) ([779074f](https://github.com/subenoeva/soundboard/commit/779074f5a106cc775fc3d3372be354bb8be62e9b))
+
 ## [0.4.2](https://github.com/subenoeva/soundboard/compare/v0.4.1...v0.4.2) (2026-08-01)
 
 
