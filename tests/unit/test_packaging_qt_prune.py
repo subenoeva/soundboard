@@ -138,17 +138,54 @@ def test_verify_passes_once_every_required_pattern_matched() -> None:
             r"PySide6\qml\QtQuick\LocalStorage\qmllocalstorageplugin.dll",
             "Qt6QmlLocalStorage",
         ),
+        # Same plugins as shipped on Linux. The first three were named here only by their
+        # Windows file name, so the prune never reached them and v0.4.3's AppImage shipped
+        # all three dangling — see the module docstring in packaging/qt_prune.py.
+        ("PySide6/Qt/plugins/imageformats/libqpdf.so", "Qt6Pdf"),
+        (
+            "PySide6/Qt/plugins/platforminputcontexts/libqtvirtualkeyboardplugin.so",
+            "Qt6VirtualKeyboard",
+        ),
+        (
+            "PySide6/Qt/plugins/qmltooling/libqmldbg_quick3dprofiler.so",
+            "Qt6Quick3DUtils",
+        ),
+        ("PySide6/Qt/lib/libQt6QmlLocalStorage.so.6", "Qt6Sql"),
+        (
+            "PySide6/Qt/qml/QtQuick/LocalStorage/libqmllocalstorageplugin.so",
+            "Qt6QmlLocalStorage",
+        ),
     ],
 )
 def test_drops_plugins_whose_dependency_was_pruned(
     plugin: str, orphaned_dependency: str
 ) -> None:
-    """v0.4.1 shipped these four with their Qt library pruned out from under them. Qt
-    loads plugins with LoadLibrary at runtime, so a dangling one fails where nothing is
+    """v0.4.1 shipped these with their Qt library pruned out from under them. Qt loads
+    plugins with dlopen/LoadLibrary at runtime, so a dangling one fails where nothing is
     watching rather than at startup."""
     assert qt_prune.prune([_entry(plugin)], verify=False) == [], (
         f"{plugin} imports {orphaned_dependency}, which the prune removes"
     )
+
+
+def test_drops_the_wayland_compositor_nothing_imports() -> None:
+    """Shipping a compositor makes no sense for a client app, and PySide6's copy has a
+    dangling libwayland-server.so.0 on top: 2.6MB of broken weight in v0.4.3."""
+    entries = [
+        _entry("PySide6/Qt/lib/libQt6WaylandCompositor.so.6"),
+        _entry("PySide6/Qt/qml/QtWayland/Compositor/libqwaylandcompositorplugin.so"),
+        _entry("PySide6/Qt/qml/QtWayland/Compositor/QtShell/qmldir"),
+    ]
+
+    assert qt_prune.prune(entries, verify=False) == []
+
+
+def test_keeps_the_wayland_client_the_platform_plugin_needs() -> None:
+    """The compositor goes, the client stays — dropping it would break the app on every
+    Wayland desktop, which is the default on current Fedora, Ubuntu and SteamOS."""
+    client = _entry("PySide6/Qt/lib/libQt6WaylandClient.so.6")
+
+    assert qt_prune.prune([client], verify=False) == [client]
 
 
 def _qml_imports() -> set[str]:

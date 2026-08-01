@@ -62,16 +62,26 @@ PRUNED_PREFIXES: tuple[str, ...] = (
     # Its only reason to exist is QtQml.LocalStorage, which links Qt6Sql (pruned above)
     # and which nothing here imports.
     "qt6qmllocalstorage",
+    # Qt ships the machinery to *be* a Wayland compositor. A client app never needs it,
+    # and PySide6's copy links libwayland-server.so.0, which desktops do not install.
+    # Note this is the compositor only: Qt6WaylandClient is what the app runs on under a
+    # Wayland session, and it stays.
+    "qt6waylandcompositor",
 )
 
-# Plugins Qt loads with LoadLibrary at runtime, whose Qt library the prune removes. They
-# are not named Qt6*, so the prefix list above never reached them: v0.4.1 shipped all
-# four with a dangling import. A plugin that fails to load does so deep inside Qt, where
+# Plugins Qt loads with dlopen/LoadLibrary at runtime, whose Qt library the prune removes.
+# They are not named Qt6*, so the prefix list above never reaches them: v0.4.1 shipped
+# them with a dangling import. A plugin that fails to load does so deep inside Qt, where
 # no traceback surfaces, which is exactly the kind of failure this project does not want.
-PRUNED_PLUGIN_FILES: tuple[str, ...] = (
-    "qpdf.dll",  # imageformats, links Qt6Pdf
-    "qtvirtualkeyboardplugin.dll",  # platforminputcontexts, links Qt6VirtualKeyboard
-    "qmldbg_quick3dprofiler.dll",  # qmltooling, links Qt6Quick3DUtils
+#
+# Matched without the file extension. Naming them `qpdf.dll` covered Windows only, and
+# v0.4.3's AppImage shipped all three of them dangling under their `libqpdf.so` spelling —
+# only `QT_DEBUG_PLUGINS=1` showed it, as "Cannot load library ...: libQt6Pdf.so.6: cannot
+# open shared object file".
+PRUNED_PLUGIN_STEMS: tuple[str, ...] = (
+    "qpdf",  # imageformats, links Qt6Pdf
+    "qtvirtualkeyboardplugin",  # platforminputcontexts, links Qt6VirtualKeyboard
+    "qmldbg_quick3dprofiler",  # qmltooling, links Qt6Quick3DUtils
 )
 
 # Paths under PySide6's `qml/` directory, matched as whole module trees.
@@ -114,6 +124,7 @@ PRUNED_QML_MODULES: tuple[str, ...] = (
     "QtQuick/Controls/macOS",
     "QtQuick/Controls/iOS",
     "QtQuick/Controls/designer",
+    "QtWayland/Compositor",
 )
 
 # The subset that must match on every platform. The rest are platform-specific (a
@@ -140,6 +151,15 @@ def _library_stem(dest: str) -> str:
     """`PySide6/Qt/lib/libQt6Core.so.6` -> `qt6core`, `PySide6\\Qt6Core.dll` -> `qt6core`."""
     name = dest.replace("\\", "/").rsplit("/", 1)[-1].lower()
     return name.removeprefix("lib")
+
+
+def _plugin_stem(dest: str) -> str:
+    """`plugins/imageformats/libqpdf.so` and `plugins\\imageformats\\qpdf.dll` -> `qpdf`.
+
+    Unlike the prefix match, plugin names are compared whole, so the extension has to go
+    or one platform's spelling silently stops matching.
+    """
+    return _library_stem(dest).split(".", 1)[0]
 
 
 def _qml_module_path(dest: str) -> str | None:
@@ -187,7 +207,7 @@ def prune[T: Sequence[Any]](entries: Iterable[T], verify: bool = True) -> list[T
         if prefix is not None:
             matched.add(prefix)
             continue
-        if _library_stem(dest) in PRUNED_PLUGIN_FILES:
+        if _plugin_stem(dest) in PRUNED_PLUGIN_STEMS:
             continue
         if _is_pruned_qml(dest):
             continue
