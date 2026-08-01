@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/subenoeva/soundboard/compare/v0.4.0...v0.4.1) (2026-08-01)
+
+
+### Miscellaneous Chores
+
+* release 0.4.1 ([#18](https://github.com/subenoeva/soundboard/issues/18)) ([0f878ca](https://github.com/subenoeva/soundboard/commit/0f878cab57d2bbff81279e010916a35f13d64e8a))
+
 ## [0.4.0](https://github.com/subenoeva/soundboard/compare/v0.3.0...v0.4.0) (2026-07-31)
 
 
