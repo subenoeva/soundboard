@@ -10,8 +10,12 @@ collect_submodules the packaged exe dies on `import pynput.keyboard` instead.
 """
 
 import os
+import sys
 
 from PyInstaller.utils.hooks import collect_submodules
+
+sys.path.insert(0, os.path.join(SPECPATH, ".."))
+from qt_prune import prune  # noqa: E402  (needs the path entry above)
 
 entry_point = os.path.join(SPECPATH, "..", "..", "src", "soundboard", "__main__.py")
 
@@ -38,6 +42,11 @@ a = Analysis(
     excludes=[],
     noarchive=False,
 )
+# Qt's own libraries are copied by PySide6's hook, not through the module graph, so
+# `excludes=` above cannot reach them — see packaging/qt_prune.py.
+a.binaries = prune(a.binaries)
+a.datas = prune(a.datas, verify=False)
+
 pyz = PYZ(a.pure)
 
 exe = EXE(

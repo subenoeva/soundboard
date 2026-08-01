@@ -335,6 +335,23 @@ workflow builds the Windows executable and the Linux AppImage with PyInstaller.
   designed but not implemented).
 - **macOS** — support via BlackHole.
 
+Lower priority:
+
+- **Windows installer** — an Inno Setup wizard shipped alongside the portable
+  executable, with an uninstaller and an *Apps & features* entry. It would install per
+  user under `%LOCALAPPDATA%\Programs\soundboard` rather than into `Program Files`: the
+  self-updater replaces the running binary in place, which an unelevated process cannot
+  do there, and elevating an automatic update is not a trade worth making. Both
+  artefacts would come from the same PyInstaller build and the same signed `SHA256SUMS`.
+  It is also the natural place to detect VB-CABLE and offer to install it, which covers
+  part of *Automatic routing* above.
+- **Download-on-demand installer** — a small stub that fetches the payload during
+  installation instead of embedding it. It does not reduce what gets downloaded, only
+  when, and it would have to reproduce the updater's Ed25519 verification rather than
+  settle for a pinned hash, or it becomes the weak link in a chain that is otherwise
+  signed end to end. Worth revisiting only if optional components ever make the payload
+  large enough to justify it.
+
 ## License
 
 Copyright (C) 2026 subenoeva
