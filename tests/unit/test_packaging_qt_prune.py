@@ -124,6 +124,33 @@ def test_verify_passes_once_every_required_pattern_matched() -> None:
     assert qt_prune.prune(entries) == [_entry(r"PySide6\Qt6Core.dll")]
 
 
+@pytest.mark.parametrize(
+    ("plugin", "orphaned_dependency"),
+    [
+        (r"PySide6\plugins\imageformats\qpdf.dll", "Qt6Pdf"),
+        (
+            r"PySide6\plugins\platforminputcontexts\qtvirtualkeyboardplugin.dll",
+            "Qt6VirtualKeyboard",
+        ),
+        (r"PySide6\plugins\qmltooling\qmldbg_quick3dprofiler.dll", "Qt6Quick3DUtils"),
+        (r"PySide6\Qt6QmlLocalStorage.dll", "Qt6Sql"),
+        (
+            r"PySide6\qml\QtQuick\LocalStorage\qmllocalstorageplugin.dll",
+            "Qt6QmlLocalStorage",
+        ),
+    ],
+)
+def test_drops_plugins_whose_dependency_was_pruned(
+    plugin: str, orphaned_dependency: str
+) -> None:
+    """v0.4.1 shipped these four with their Qt library pruned out from under them. Qt
+    loads plugins with LoadLibrary at runtime, so a dangling one fails where nothing is
+    watching rather than at startup."""
+    assert qt_prune.prune([_entry(plugin)], verify=False) == [], (
+        f"{plugin} imports {orphaned_dependency}, which the prune removes"
+    )
+
+
 def _qml_imports() -> set[str]:
     imports: set[str] = set()
     for path in Path("src/soundboard/ui/qml").rglob("*.qml"):
