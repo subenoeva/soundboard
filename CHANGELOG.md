@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/subenoeva/soundboard/compare/v0.4.1...v0.4.2) (2026-08-01)
+
+
+### Bug Fixes
+
+* drop Qt plugins left without their pruned library ([#21](https://github.com/subenoeva/soundboard/issues/21)) ([c643136](https://github.com/subenoeva/soundboard/commit/c643136553aacd18850e18c33f9cf8f333be4225))
+
 ## [0.4.1](https://github.com/subenoeva/soundboard/compare/v0.4.0...v0.4.1) (2026-08-01)
 
 
