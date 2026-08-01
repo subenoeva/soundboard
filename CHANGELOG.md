@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.4](https://github.com/subenoeva/soundboard/compare/v0.4.3...v0.4.4) (2026-08-01)
+
+
+### Bug Fixes
+
+* prune the Qt plugins Linux left orphaned ([#25](https://github.com/subenoeva/soundboard/issues/25)) ([8b5a63e](https://github.com/subenoeva/soundboard/commit/8b5a63e72c70dba57c8592f374e0b7908e7fb2b5))
+
 ## [0.4.3](https://github.com/subenoeva/soundboard/compare/v0.4.2...v0.4.3) (2026-08-01)
 
 
