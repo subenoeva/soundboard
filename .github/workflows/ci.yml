@@ -23,6 +23,10 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb
       - uses: astral-sh/setup-uv@v5
+        # Before `uv sync`, which would quietly rewrite a stale lockfile instead of
+        # reporting it. Both 0.4.0 and 0.4.1 shipped with uv.lock pinning the previous
+        # version, and nothing anywhere said so.
+      - run: uv lock --check
       - run: uv sync --group dev
       - run: uv run ruff check .
       - run: uv run mypy
