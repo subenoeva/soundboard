@@ -17,6 +17,7 @@ dependencies = [
     "pynput>=1.8.1",
     "httpx>=0.28.1",
     "cryptography>=45.0",
+    "pedalboard>=0.9.24",
 ]
 
 [project.scripts]
