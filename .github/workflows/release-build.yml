@@ -121,10 +121,22 @@ jobs:
             exit 1
           fi
           kill "$PID"
+          # A grep that finds nothing proves nothing unless the log it read has the plugin
+          # loader in it, so check the probe ran before trusting its silence.
+          if ! grep -q "plugin.factoryloader" qt.log; then
+            echo "QT_DEBUG_PLUGINS produced no plugin log — the check below never ran" >&2
+            exit 1
+          fi
           # A plugin whose Qt library packaging/qt_prune.py removed fails inside dlopen,
           # and Qt carries on without it — the app starts, stays up, and ships broken.
           # v0.4.3 went out with three of these. QT_DEBUG_PLUGINS is the only thing that
           # says so out loud, and on Linux the message names the library that is gone.
+          #
+          # There is no counterpart in the Windows job: that binary is built --windowed,
+          # so it has no stdout or stderr to write this log to (Qt falls back to the
+          # debugger), and the message there does not name the missing DLL anyway. What
+          # covers Windows is tests/unit/test_packaging_qt_prune.py, which asserts both
+          # file-name spellings of every pruned plugin.
           if grep -q "cannot load:.*libQt6" qt.log; then
             echo "a bundled Qt plugin lost its library to the prune:" >&2
             grep "cannot load:.*libQt6" qt.log >&2
