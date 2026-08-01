@@ -168,6 +168,18 @@ def test_drops_plugins_whose_dependency_was_pruned(
     )
 
 
+def test_drops_the_tiff_plugin_that_no_current_distribution_can_load() -> None:
+    """PySide6 builds libqtiff.so against libtiff.so.5, and Ubuntu 24.04, Debian 13 and
+    Fedora all ship libtiff.so.6. It is the one library the bundle asks the host for that
+    the host does not have, and nothing here reads TIFFs."""
+    entries = [
+        _entry("PySide6/Qt/plugins/imageformats/libqtiff.so"),
+        _entry(r"PySide6\plugins\imageformats\qtiff.dll"),
+    ]
+
+    assert qt_prune.prune(entries, verify=False) == []
+
+
 def test_drops_the_wayland_compositor_nothing_imports() -> None:
     """Shipping a compositor makes no sense for a client app, and PySide6's copy has a
     dangling libwayland-server.so.0 on top: 2.6MB of broken weight in v0.4.3."""

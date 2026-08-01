@@ -82,6 +82,11 @@ PRUNED_PLUGIN_STEMS: tuple[str, ...] = (
     "qpdf",  # imageformats, links Qt6Pdf
     "qtvirtualkeyboardplugin",  # platforminputcontexts, links Qt6VirtualKeyboard
     "qmldbg_quick3dprofiler",  # qmltooling, links Qt6Quick3DUtils
+    # Not our doing: PySide6 builds this against libtiff.so.5, and every current
+    # distribution ships libtiff.so.6. It is dead weight everywhere it lands, and it was
+    # the only thing keeping the bundle's host dependencies from being a set every
+    # desktop already has. Nothing here reads TIFFs.
+    "qtiff",
 )
 
 # Paths under PySide6's `qml/` directory, matched as whole module trees.
