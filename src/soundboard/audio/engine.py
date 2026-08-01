@@ -13,6 +13,7 @@ from soundboard.audio.drift import DriftController, DriftResampler
 from soundboard.audio.mixer import Mixer
 from soundboard.audio.ringbuffer import RingBuffer
 from soundboard.audio.voice import Voice
+from soundboard.effects.chain import EffectChain
 
 
 @dataclass(frozen=True)
@@ -55,7 +56,11 @@ class AudioEngine:
         self._mixer = Mixer(blocksize=block, samplerate=self._config.samplerate)
         self._mic_block = np.zeros(block, dtype=np.float32)
         self._mix_block = np.zeros(block, dtype=np.float32)
-        self._commands: deque[tuple[str, Voice | None]] = deque()
+        self._chain = EffectChain()
+        self._commands: deque[tuple[str, Voice | EffectChain | None]] = deque()
+        self._retired: deque[EffectChain] = deque()
+        self._input_peak = 0.0
+        self._chain_peak = 0.0
         self._ratio = 1.0
         self._input_stream: Stream | None = None
         self._output_stream: Stream | None = None
@@ -143,6 +148,24 @@ class AudioEngine:
         """Stop every playing clip. Safe to call from any thread."""
         self._commands.append(("stop_all", None))
 
+    def set_chain(self, chain: EffectChain) -> None:
+        """Install ``chain`` on the callback thread. Safe to call from any thread.
+
+        The caller builds the replacement whole and hands it over; the callback
+        only rebinds a reference, so it never sees a half-built chain.
+        """
+        self._commands.append(("chain", chain))
+
+    def drain_retired(self) -> list[EffectChain]:
+        """Take the chains the callback has swapped out. For the UI thread only.
+
+        Releasing a chain can mean tearing down an ONNX session or a VST3 plugin,
+        neither of which may happen on the callback thread; the callback parks
+        them here and whoever calls this holds the last reference.
+        """
+        retired = self._retired
+        return [retired.popleft() for _ in range(len(retired))]
+
     def voice_states(self) -> list[tuple[int, float]]:
         """(voice_id, progress) snapshot; safe to call from the UI thread."""
         return self._mixer.voice_states()
@@ -151,19 +174,38 @@ class AudioEngine:
     def last_peak(self) -> float:
         return self._mixer.last_peak
 
+    @property
+    def input_peak(self) -> float:
+        """Microphone level before the chain; drives the rack's MIC card."""
+        return self._input_peak
+
+    @property
+    def chain_peak(self) -> float:
+        """Microphone level after the chain; drives the rack's OUT card."""
+        return self._chain_peak
+
     def _on_input(self, block: np.ndarray) -> None:
         self._ring.write(block)
 
     def _on_output(self, out: np.ndarray) -> None:
         commands = self._commands
         while commands:
-            name, voice = commands.popleft()
-            if name == "play" and voice is not None:
-                self._mixer.add_voice(voice)
+            name, payload = commands.popleft()
+            if name == "play" and isinstance(payload, Voice):
+                self._mixer.add_voice(payload)
             elif name == "stop_all":
                 self._mixer.stop_all()
+            elif name == "chain" and isinstance(payload, EffectChain):
+                self._retired.append(self._chain)
+                self._chain = payload
 
         self._ratio = self._controller.update(self._ring.fill)
         self._resampler.read(self._mic_block, self._ratio)
-        self._mixer.process(self._mic_block, self._mix_block)
+        # max/-min instead of max(abs(...)), for the reason Mixer gives: it is the
+        # same absolute peak without the temporary array np.abs allocates.
+        mic = self._mic_block
+        self._input_peak = float(max(mic.max(), -mic.min()))
+        self._chain.process(mic)
+        self._chain_peak = float(max(mic.max(), -mic.min()))
+        self._mixer.process(mic, self._mix_block)
         out[:] = self._mix_block[:, None]
