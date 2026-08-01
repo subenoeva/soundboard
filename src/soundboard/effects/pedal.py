@@ -48,6 +48,10 @@ class PedalEffect:
         """Every knob's current position, read off the plugin, for persistence."""
         return {name: float(getattr(self._plugin, name)) for name in self._specs}
 
+    def param_specs(self) -> tuple[ParamSpec, ...]:
+        """What the parameter panel draws. In the order the block declared them."""
+        return tuple(self._specs.values())
+
     @property
     def latency_frames(self) -> int:
         """Always zero: pedalboard's built-ins do not delay the signal.

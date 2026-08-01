@@ -108,6 +108,13 @@ def test_set_param_rejects_an_unknown_name() -> None:
         _gain().set_param("wetness", 0.5)
 
 
+def test_the_descriptors_come_back_off_the_block() -> None:
+    # The parameter panel reads them from here rather than from the registry,
+    # because for a VST3 the registry has nothing to say: the plugin is the only
+    # thing that knows what knobs it has.
+    assert [spec.name for spec in _gain().param_specs()] == ["gain_db"]
+
+
 def test_params_reports_what_the_plugin_currently_holds() -> None:
     effect = _gain()
 

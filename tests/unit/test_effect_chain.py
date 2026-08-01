@@ -3,6 +3,7 @@ from collections.abc import Callable
 import numpy as np
 
 from soundboard.effects.chain import EffectChain, Slot
+from soundboard.effects.params import ParamSpec
 
 
 class FakeEffect:
@@ -38,6 +39,9 @@ class FakeEffect:
 
     def params(self) -> dict[str, float]:
         return dict(self._params)
+
+    def param_specs(self) -> tuple[ParamSpec, ...]:
+        return ()
 
     @property
     def latency_frames(self) -> int:

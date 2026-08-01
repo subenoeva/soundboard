@@ -8,6 +8,7 @@ import pytest
 from soundboard.audio.engine import AudioEngine, EngineConfig
 from soundboard.audio.fake_backend import FakeBackend
 from soundboard.effects.chain import EffectChain
+from soundboard.effects.params import ParamSpec
 
 
 class ConstantEffect:
@@ -31,6 +32,9 @@ class ConstantEffect:
 
     def params(self) -> dict[str, float]:
         return {"value": self._value}
+
+    def param_specs(self) -> tuple[ParamSpec, ...]:
+        return (ParamSpec("value", "Value", 0.0, 1.0, 0.0),)
 
     @property
     def latency_frames(self) -> int:
@@ -87,6 +91,23 @@ def test_the_replaced_chain_is_handed_back_once_the_swap_has_happened() -> None:
     # reference to it itself.
     assert engine.drain_retired() == [first]
     assert engine.drain_retired() == []
+    engine.stop()
+
+
+def test_a_parameter_change_waits_for_the_callback() -> None:
+    engine, backend = _running_engine()
+    effect = ConstantEffect(0.1)
+    engine.set_chain(EffectChain([effect]))
+    backend.advance(1)
+
+    engine.set_param(effect, "value", 0.2)
+
+    # Reaching into a live plugin from the calling thread while the callback is
+    # inside process() is concurrency pedalboard does not document, so a knob
+    # move rides the same deque the chain swap does and lands between blocks.
+    assert effect.params() == {"value": 0.1}
+    backend.advance(1)
+    assert effect.params() == {"value": 0.2}
     engine.stop()
 
 

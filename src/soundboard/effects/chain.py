@@ -8,6 +8,8 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 
+from soundboard.effects.params import ParamSpec
+
 
 @runtime_checkable
 class Effect(Protocol):
@@ -18,10 +20,11 @@ class Effect(Protocol):
     mixer will read, so an effect that needs to buffer internally (the neural
     block does) owns that problem rather than passing it upstream.
 
-    ``params``/``set_param`` are here rather than on the concrete blocks because
+    The parameter methods are here rather than on the concrete blocks because
     persistence and the parameter panel address every block the same way, whether
     it is a pedalboard plugin, a VST3 nobody here has seen, or the neural block
-    and its dry/wet control.
+    and its dry/wet control. ``param_specs`` in particular has to come from the
+    block: the registry knows the built-ins, but only the plugin knows a VST3.
     """
 
     kind: str
@@ -33,6 +36,8 @@ class Effect(Protocol):
     def set_param(self, name: str, value: float) -> None: ...
 
     def params(self) -> dict[str, float]: ...
+
+    def param_specs(self) -> tuple[ParamSpec, ...]: ...
 
     @property
     def latency_frames(self) -> int: ...
@@ -49,6 +54,21 @@ class Slot:
 
     effect: Effect
     enabled: bool = True
+
+
+@dataclass(frozen=True)
+class ParamChange:
+    """A knob move on its way to the callback thread.
+
+    Parameter edits do not mutate a live plugin from the thread that made them:
+    calling into a plugin while the callback is inside ``process()`` is
+    concurrency pedalboard does not document. They ride the engine's command
+    deque instead, which puts them between blocks like everything else.
+    """
+
+    effect: Effect
+    name: str
+    value: float
 
 
 class EffectChain:

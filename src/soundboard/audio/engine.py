@@ -13,7 +13,7 @@ from soundboard.audio.drift import DriftController, DriftResampler
 from soundboard.audio.mixer import Mixer
 from soundboard.audio.ringbuffer import RingBuffer
 from soundboard.audio.voice import Voice
-from soundboard.effects.chain import EffectChain
+from soundboard.effects.chain import Effect, EffectChain, ParamChange
 
 
 @dataclass(frozen=True)
@@ -57,7 +57,7 @@ class AudioEngine:
         self._mic_block = np.zeros(block, dtype=np.float32)
         self._mix_block = np.zeros(block, dtype=np.float32)
         self._chain = EffectChain()
-        self._commands: deque[tuple[str, Voice | EffectChain | None]] = deque()
+        self._commands: deque[tuple[str, Voice | EffectChain | ParamChange | None]] = deque()
         self._retired: deque[EffectChain] = deque()
         self._input_peak = 0.0
         self._chain_peak = 0.0
@@ -156,6 +156,13 @@ class AudioEngine:
         """
         self._commands.append(("chain", chain))
 
+    def set_param(self, effect: Effect, name: str, value: float) -> None:
+        """Move one knob on a live block. Safe to call from any thread.
+
+        Queued rather than applied here for the reason ``ParamChange`` gives.
+        """
+        self._commands.append(("param", ParamChange(effect, name, value)))
+
     def drain_retired(self) -> list[EffectChain]:
         """Take the chains the callback has swapped out. For the UI thread only.
 
@@ -198,6 +205,8 @@ class AudioEngine:
             elif name == "chain" and isinstance(payload, EffectChain):
                 self._retired.append(self._chain)
                 self._chain = payload
+            elif name == "param" and isinstance(payload, ParamChange):
+                payload.effect.set_param(payload.name, payload.value)
 
         self._ratio = self._controller.update(self._ring.fill)
         self._resampler.read(self._mic_block, self._ratio)
