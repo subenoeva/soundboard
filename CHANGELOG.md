@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.5](https://github.com/subenoeva/soundboard/compare/v0.4.4...v0.4.5) (2026-08-01)
+
+
+### Bug Fixes
+
+* **ci:** install the X11 libraries Qt's xcb plugin needs to start ([#27](https://github.com/subenoeva/soundboard/issues/27)) ([f98f7b2](https://github.com/subenoeva/soundboard/commit/f98f7b2167889432b5d122c6f2fcaf7e9346c7fb))
+
 ## [0.4.4](https://github.com/subenoeva/soundboard/compare/v0.4.3...v0.4.4) (2026-08-01)
 
 
