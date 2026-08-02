@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.7](https://github.com/subenoeva/soundboard/compare/v0.4.6...v0.4.7) (2026-08-02)
+
+
+### Bug Fixes
+
+* **audio:** absorb bursty input callbacks ([#32](https://github.com/subenoeva/soundboard/issues/32)) ([1619947](https://github.com/subenoeva/soundboard/commit/161994747caca8d975d3354261c9bd962e8cb7a0))
+
 ## [0.4.6](https://github.com/subenoeva/soundboard/compare/v0.4.5...v0.4.6) (2026-08-01)
 
 
