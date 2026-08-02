@@ -55,7 +55,6 @@ Rectangle {
 
         Text {
             Layout.fillWidth: true
-            Layout.fillHeight: true
             text: root.errorText !== "" ? root.errorText : root.summary
             color: root.errorText !== "" ? Theme.danger : Theme.textSecondary
             font.pixelSize: 10
@@ -64,34 +63,49 @@ Rectangle {
             maximumLineCount: 3
         }
 
+        Text {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            text: root.latencyMs > 0 ? root.latencyMs.toFixed(1) + " ms" : "Sin latencia"
+            color: Theme.textSecondary
+            font.pixelSize: 10
+        }
+
         RowLayout {
             Layout.fillWidth: true
-            Text {
-                Layout.fillWidth: true
-                text: root.latencyMs > 0 ? root.latencyMs.toFixed(1) + " ms" : "Sin latencia"
-                color: Theme.textSecondary
-                font.pixelSize: 10
+            Button {
+                id: reorderButton
+                objectName: "effectReorderButton"
+                Layout.preferredWidth: 36
+                text: "✥"
+                leftPadding: 4
+                rightPadding: 4
+                implicitHeight: 26
+                hoverEnabled: true
+                Accessible.name: "Mover"
+                ToolTip.visible: hovered
+                ToolTip.text: "Mover"
+
+                MouseArea {
+                    id: dragArea
+                    objectName: "effectDragHandle"
+                    anchors.fill: parent
+                    cursorShape: drag.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                    drag.target: root
+                    onPressed: root.selectedRequested()
+                    onReleased: {
+                        root.Drag.drop()
+                        root.x = 0
+                        root.y = 0
+                    }
+                }
             }
             Button {
+                Layout.fillWidth: true
                 text: "Quitar"
                 onClicked: root.removeRequested()
             }
         }
     }
 
-    MouseArea {
-        id: dragArea
-        objectName: "effectDragHandle"
-        anchors { left: parent.left; right: parent.right; top: parent.top;
-                  rightMargin: bypass.width + Theme.pad }
-        height: 36
-        cursorShape: drag.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-        drag.target: root
-        onPressed: root.selectedRequested()
-        onReleased: {
-            root.Drag.drop()
-            root.x = 0
-            root.y = 0
-        }
-    }
 }

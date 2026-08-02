@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QMetaObject, QObject
+import pytest
+from PySide6.QtCore import QMetaObject, QObject, QPointF
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtWidgets import QApplication
@@ -38,6 +39,15 @@ def _find_visual_child(item: QQuickItem, name: str) -> QQuickItem | None:
         if found := _find_visual_child(child, name):
             return found
     return None
+
+
+def _find_visual_children(item: QQuickItem, name: str) -> list[QQuickItem]:
+    found: list[QQuickItem] = []
+    for child in item.childItems():
+        if child.objectName() == name:
+            found.append(child)
+        found.extend(_find_visual_children(child, name))
+    return found
 
 
 def make_controller(tmp_path: Path) -> AppController:
@@ -181,10 +191,14 @@ def test_selecting_an_effect_lays_out_its_parameter_panel(
     assert qml_warnings == []
 
 
-def test_saved_effect_is_rendered_between_the_fixed_rack_ends(
+def test_saved_effects_are_aligned_between_the_fixed_rack_ends(
     qapp: QApplication, qtbot: Any, tmp_path: Path
 ) -> None:
-    save_effects(tmp_path / "effects.json", [EffectEntry(kind="gain")])
+    save_effects(
+        tmp_path / "effects.json",
+        [EffectEntry(kind="gain"), EffectEntry(kind="limiter"),
+         EffectEntry(kind="highpass")],
+    )
     controller = make_controller(tmp_path)
     controller.bootstrap()
     engine, warnings = _load(controller)
@@ -199,24 +213,32 @@ def test_saved_effect_is_rendered_between_the_fixed_rack_ends(
     tabs.setProperty("currentIndex", 1)
     qapp.processEvents()
 
-    assert rack.property("count") == 1
+    assert rack.property("count") == 3
     assert rack.property("width") > 0
     assert rack.property("height") > 0
 
     assert isinstance(rack, QQuickItem)
 
-    def rack_block() -> QQuickItem | None:
+    def rack_blocks() -> list[QQuickItem]:
         qapp.processEvents()
-        return _find_visual_child(rack, "effectBlock")
+        return _find_visual_children(rack, "effectBlock")
 
-    qtbot.waitUntil(lambda: rack_block() is not None)
+    qtbot.waitUntil(lambda: len(rack_blocks()) == 3)
 
     mic = root.findChild(QObject, "micCard")
-    block = rack_block()
+    blocks = rack_blocks()
     out = root.findChild(QObject, "outCard")
 
-    assert mic is not None
-    assert block is not None and block.property("effectLabel") == "Gain"
-    assert out is not None
+    assert isinstance(mic, QQuickItem)
+    assert {block.property("effectLabel") for block in blocks} == {
+        "Gain", "Limiter", "High-pass",
+    }
+    assert isinstance(out, QQuickItem)
+    mic_center = mic.mapToScene(QPointF(0, mic.height() / 2)).y()
+    out_center = out.mapToScene(QPointF(0, out.height() / 2)).y()
+    for block in blocks:
+        block_center = block.mapToScene(QPointF(0, block.height() / 2)).y()
+        assert block_center == pytest.approx(mic_center, abs=1)
+        assert block_center == pytest.approx(out_center, abs=1)
     qml_warnings = [w for w in warnings if ".qml" in w]
     assert qml_warnings == []

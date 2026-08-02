@@ -118,30 +118,36 @@ Item {
 
                 delegate: DropArea {
                     width: 166
-                    height: Math.min(rack.height, 142)
+                    height: rack.height
                     keys: ["effect-block"]
                     onEntered: (drag) => {
                         if (drag.source !== null)
                             root.moveEffect(drag.source.rackIndex, index)
                     }
 
-                    EffectBlock {
+                    Item {
                         width: parent.width
-                        height: parent.height
-                        rackIndex: index
-                        effectLabel: model.label
-                        summary: model.summary
-                        effectEnabled: model.enabled
-                        latencyMs: model.latencyMs
-                        errorText: model.errorText
-                        selected: root.selectedIndex === index
-                        onSelectedRequested: root.selectEffect(index, model.label)
-                        onToggleRequested: (on) => App.effectsModel.set_enabled(index, on)
-                        onRemoveRequested: {
-                            App.effectsModel.remove(index)
-                            root.selectedIndex = -1
-                            root.selectedLabel = ""
-                            root.selectedParameters = []
+                        height: Math.min(parent.height, 142)
+                        y: Math.max(0, (parent.height - height) / 2)
+
+                        EffectBlock {
+                            width: parent.width
+                            height: parent.height
+                            rackIndex: index
+                            effectLabel: model.label
+                            summary: model.summary
+                            effectEnabled: model.enabled
+                            latencyMs: model.latencyMs
+                            errorText: model.errorText
+                            selected: root.selectedIndex === index
+                            onSelectedRequested: root.selectEffect(index, model.label)
+                            onToggleRequested: (on) => App.effectsModel.set_enabled(index, on)
+                            onRemoveRequested: {
+                                App.effectsModel.remove(index)
+                                root.selectedIndex = -1
+                                root.selectedLabel = ""
+                                root.selectedParameters = []
+                            }
                         }
                     }
                 }

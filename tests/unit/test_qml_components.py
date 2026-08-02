@@ -158,6 +158,26 @@ def test_clip_pad_wraps_the_shortcut_in_a_badge(qapp: object) -> None:
     assert badge.property("width") <= 120 - 16
 
 
+def test_effect_block_offers_a_visible_reorder_button(qapp: object) -> None:
+    _component, block = _instantiate("EffectBlock.qml")
+    block.setProperty("width", 166)
+    drag_handle = block.findChild(QObject, "effectDragHandle")
+    reorder_button = block.findChild(QObject, "effectReorderButton")
+
+    assert isinstance(block, QQuickItem)
+    assert isinstance(drag_handle, QQuickItem)
+    assert isinstance(reorder_button, QQuickItem)
+    assert reorder_button.property("visible") is True
+    assert reorder_button.property("text") == "✥"
+    assert reorder_button.property("implicitContentWidth") <= reorder_button.property(
+        "availableWidth"
+    )
+    handle_origin = drag_handle.mapToItem(reorder_button, QPointF())
+    assert handle_origin == QPointF(0, 0)
+    assert drag_handle.width() == reorder_button.width()
+    assert drag_handle.height() == reorder_button.height()
+
+
 def test_effect_block_drag_handle_does_not_cover_the_bypass_switch(qapp: object) -> None:
     _component, block = _instantiate("EffectBlock.qml")
     block.setProperty("width", 166)
@@ -168,4 +188,7 @@ def test_effect_block_drag_handle_does_not_cover_the_bypass_switch(qapp: object)
     assert isinstance(drag_handle, QQuickItem)
     assert isinstance(bypass, QQuickItem)
     bypass_left = bypass.mapToItem(block, QPointF()).x()
-    assert drag_handle.x() + drag_handle.width() <= bypass_left
+    handle_right = drag_handle.mapToItem(
+        block, QPointF(drag_handle.width(), 0)
+    ).x()
+    assert handle_right <= bypass_left
