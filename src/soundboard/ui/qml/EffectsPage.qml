@@ -139,6 +139,7 @@ Item {
                             effectEnabled: model.enabled
                             latencyMs: model.latencyMs
                             errorText: model.errorText
+                            loading: model.loading
                             selected: root.selectedIndex === index
                             onSelectedRequested: root.selectEffect(index, model.label)
                             onToggleRequested: (on) => App.effectsModel.set_enabled(index, on)

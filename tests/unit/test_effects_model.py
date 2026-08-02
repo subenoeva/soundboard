@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
+
+import pytest
+from PySide6.QtCore import QThreadPool
 
 from soundboard.effects.chain import Effect, EffectChain
 from soundboard.effects.registry import BUILT_INS
@@ -280,8 +284,130 @@ def test_the_palette_offers_every_built_in(qtbot: Any, tmp_path: Path) -> None:
 
     # The palette is drawn from the registry rather than listed again in QML,
     # where a new block would have to be remembered twice.
-    assert {row["kind"] for row in catalog} == set(BUILT_INS)
+    assert {row["kind"] for row in catalog} == set(BUILT_INS) | {"neural"}
     assert {"kind": "reverb", "label": "Reverb"} in catalog
+    assert {"kind": "neural", "label": "Reducción neural"} in catalog
+
+
+def test_a_deferred_block_loads_off_the_qt_thread(qtbot: Any, tmp_path: Path) -> None:
+    engine = FakeEngine()
+    effect = _DelayedEffect(960)
+    loader_threads: list[int] = []
+
+    def load(entry: EffectEntry, blocksize: int) -> Effect:
+        loader_threads.append(threading.get_ident())
+        assert entry.kind == "neural"
+        assert blocksize == 256
+        return effect
+
+    model = EffectsModel(
+        engine,
+        [LoadedEffect(EffectEntry(kind="neural"), loading=True)],
+        tmp_path / "effects.json",
+        load_effect=load,
+        blocksize=256,
+    )
+    row = model.index(0)
+
+    assert model.data(row, EffectsModel.LOADING_ROLE) is True
+    assert engine.chains[-1].slots == ()
+    assert QThreadPool.globalInstance().waitForDone(5000)
+    qtbot.waitUntil(lambda: model.data(row, EffectsModel.LOADING_ROLE) is False)
+
+    assert loader_threads and loader_threads[0] != threading.get_ident()
+    slots = engine.chains[-1].slots
+    assert len(slots) == 1
+    assert next(iter(slots)).effect is effect
+
+
+def test_finishing_a_neural_load_enables_callback_safe_gc(
+    qtbot: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "soundboard.ui.effects_model.enable_realtime_gc",
+        lambda: calls.append("enable"),
+    )
+    model = EffectsModel(
+        FakeEngine(),
+        [LoadedEffect(EffectEntry(kind="neural"), loading=True)],
+        tmp_path / "effects.json",
+        load_effect=lambda entry, blocksize: _DelayedEffect(960),
+    )
+
+    assert QThreadPool.globalInstance().waitForDone(5000)
+    qtbot.waitUntil(lambda: not model._active_workers)
+
+    assert calls == ["enable"]
+
+
+def test_a_deferred_load_failure_stays_visible_on_its_row(
+    qtbot: Any, tmp_path: Path
+) -> None:
+    def fail(entry: EffectEntry, blocksize: int) -> Effect:
+        raise RuntimeError("model file is missing")
+
+    model = EffectsModel(
+        FakeEngine(),
+        [LoadedEffect(EffectEntry(kind="neural"), loading=True)],
+        tmp_path / "effects.json",
+        load_effect=fail,
+    )
+    row = model.index(0)
+
+    assert QThreadPool.globalInstance().waitForDone(5000)
+    qtbot.waitUntil(lambda: model.data(row, EffectsModel.LOADING_ROLE) is False)
+
+    assert "model file is missing" in model.data(row, EffectsModel.ERROR_ROLE)
+    assert model.rowCount() == 1
+
+
+def test_a_retired_model_drops_a_late_effect_result(qtbot: Any, tmp_path: Path) -> None:
+    release = threading.Event()
+    effect = _DelayedEffect(960)
+
+    def load(entry: EffectEntry, blocksize: int) -> Effect:
+        release.wait(2)
+        return effect
+
+    engine = FakeEngine()
+    model = EffectsModel(
+        engine,
+        [LoadedEffect(EffectEntry(kind="neural"), loading=True)],
+        tmp_path / "effects.json",
+        load_effect=load,
+    )
+    model.detach()
+    release.set()
+
+    assert QThreadPool.globalInstance().waitForDone(5000)
+    qtbot.wait(10)
+
+    assert all(not chain.slots for chain in engine.chains)
+
+
+def test_adding_neural_persists_the_loading_row_before_it_finishes(
+    qtbot: Any, tmp_path: Path
+) -> None:
+    release = threading.Event()
+
+    def load(entry: EffectEntry, blocksize: int) -> Effect:
+        release.wait(2)
+        return _DelayedEffect(960)
+
+    model = EffectsModel(
+        FakeEngine(), [], tmp_path / "effects.json", load_effect=load
+    )
+
+    model.add("neural")
+
+    assert load_effects(tmp_path / "effects.json") == [EffectEntry(kind="neural")]
+    assert model.data(model.index(0), EffectsModel.LOADING_ROLE) is True
+    release.set()
+    assert QThreadPool.globalInstance().waitForDone(5000)
+    qtbot.waitUntil(
+        lambda: model.data(model.index(0), EffectsModel.LOADING_ROLE) is False
+    )
 
 
 class _DelayedEffect:

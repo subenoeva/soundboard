@@ -12,6 +12,7 @@ Rectangle {
     property bool effectEnabled: true
     property real latencyMs: 0.0
     property string errorText: ""
+    property bool loading: false
     property bool selected: false
     signal selectedRequested()
     signal toggleRequested(bool on)
@@ -55,7 +56,8 @@ Rectangle {
 
         Text {
             Layout.fillWidth: true
-            text: root.errorText !== "" ? root.errorText : root.summary
+            text: root.loading ? "Cargando…"
+                  : root.errorText !== "" ? root.errorText : root.summary
             color: root.errorText !== "" ? Theme.danger : Theme.textSecondary
             font.pixelSize: 10
             wrapMode: Text.Wrap

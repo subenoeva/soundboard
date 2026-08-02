@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pytest import MonkeyPatch
+
 from soundboard.audio.engine import EngineMetrics
 from soundboard.effects.chain import EffectChain
 from soundboard.ui.engine_bridge import EngineBridge
@@ -81,3 +83,33 @@ def test_poll_publishes_the_effects_rack_metrics(qtbot: object) -> None:
     assert bridge.chainPeak == 0.1  # type: ignore[comparison-overlap]
     assert bridge.chainLatencyMs == 20.0  # type: ignore[comparison-overlap]
     assert bridge.chainCostMs == 1.25  # type: ignore[comparison-overlap]
+
+
+def test_poll_collects_callback_allocations_on_the_qt_thread(
+    qtbot: object, monkeypatch: MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "soundboard.ui.engine_bridge.collect_realtime_garbage",
+        lambda: calls.append("collect"),
+    )
+    bridge = EngineBridge(FakeEngine())
+
+    bridge.poll()
+
+    assert calls == ["collect"]
+
+
+def test_stopping_the_bridge_restores_automatic_gc(
+    qtbot: object, monkeypatch: MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "soundboard.ui.engine_bridge.restore_realtime_garbage",
+        lambda: calls.append("restore"),
+    )
+    bridge = EngineBridge(FakeEngine())
+
+    bridge.stop()
+
+    assert calls == ["restore"]

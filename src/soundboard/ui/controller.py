@@ -209,7 +209,13 @@ class AppController(QObject):
             self._layout, self._layout_path, parent=self,
         )
         self._grid.toast.connect(self.toast)
-        self._effects = EffectsModel(engine, effects, self._effects_path, parent=self)
+        self._effects = EffectsModel(
+            engine,
+            effects,
+            self._effects_path,
+            parent=self,
+            blocksize=self._layout.blocksize,
+        )
         self._effects.toast.connect(self.toast)
         self._bridge = EngineBridge(engine, parent=self)
         self._bridge.voice_states_updated.connect(self._grid.apply_voice_states)
@@ -243,6 +249,7 @@ class AppController(QObject):
             grid.deleteLater()
         if self._effects is not None:
             effects, self._effects = self._effects, None
+            effects.detach()
             self.effectsModelChanged.emit()
             effects.deleteLater()
         if self._engine is not None:

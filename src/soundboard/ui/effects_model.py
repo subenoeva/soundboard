@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Protocol
@@ -13,13 +13,16 @@ from PySide6.QtCore import (
     QObject,
     QPersistentModelIndex,
     Qt,
+    QThreadPool,
     Signal,
     Slot,
 )
 
 from soundboard.effects.chain import Effect, EffectChain
 from soundboard.effects.chain import Slot as ChainSlot
-from soundboard.effects.registry import BUILT_INS, create
+from soundboard.effects.realtime_gc import enable as enable_realtime_gc
+from soundboard.effects.registry import catalog, create, label_for
+from soundboard.ui.effect_worker import EffectLoadWorker, load_effect_entry
 from soundboard.ui.effects_store import EffectEntry, LoadedEffect, save_effects
 
 
@@ -50,6 +53,7 @@ class EffectsModel(QAbstractListModel):
     SUMMARY_ROLE = KIND_ROLE + 3
     LATENCY_MS_ROLE = KIND_ROLE + 4
     ERROR_ROLE = KIND_ROLE + 5
+    LOADING_ROLE = KIND_ROLE + 6
 
     toast = Signal(str)
 
@@ -60,17 +64,34 @@ class EffectsModel(QAbstractListModel):
         path: Path,
         parent: QObject | None = None,
         samplerate: int = 48_000,
+        blocksize: int = 256,
+        load_effect: Callable[[EffectEntry, int], Effect] | None = None,
     ) -> None:
         super().__init__(parent)
         self._engine = engine
         self._rows = [_adopted(row) for row in rows]
         self._path = path
         self._samplerate = samplerate
+        self._blocksize = blocksize
+        self._load_effect = load_effect or load_effect_entry
+        self._active_workers: set[EffectLoadWorker] = set()
+        self._live = True
         self._push()
+        for row in self._rows:
+            if row.loading:
+                self._start_loading(row)
 
     @Slot(str)
     def add(self, kind: str) -> None:
         """Append a block from the palette, built with the defaults it declares."""
+        if kind == "neural":
+            row = LoadedEffect(EffectEntry(kind=kind), loading=True)
+            self.beginInsertRows(QModelIndex(), len(self._rows), len(self._rows))
+            self._rows.append(row)
+            self.endInsertRows()
+            self._commit()
+            self._start_loading(row)
+            return
         try:
             effect = create(kind)
         except KeyError as exc:
@@ -163,7 +184,45 @@ class EffectsModel(QAbstractListModel):
     @Slot(result="QVariantList")
     def catalog(self) -> list[dict[str, str]]:
         """What the palette offers, so QML does not list the blocks a second time."""
-        return [{"kind": spec.kind, "label": spec.label} for spec in BUILT_INS.values()]
+        return catalog()
+
+    def detach(self) -> None:
+        """Ignore results belonging to a model retired during a device change."""
+        self._live = False
+
+    def _start_loading(self, row: LoadedEffect) -> None:
+        worker = EffectLoadWorker(lambda: self._load_effect(row.entry, self._blocksize))
+        self._active_workers.add(worker)
+
+        def finish(effect: Effect) -> None:
+            self._active_workers.discard(worker)
+            if not self._live:
+                return
+            index = next((i for i, current in enumerate(self._rows) if current is row), -1)
+            if index < 0:
+                return
+            if effect.kind == "neural":
+                enable_realtime_gc()
+            self._rows[index] = _adopted(LoadedEffect(row.entry, effect=effect))
+            self._emit_row_changed(
+                index,
+                [self.SUMMARY_ROLE, self.LATENCY_MS_ROLE, self.ERROR_ROLE, self.LOADING_ROLE],
+            )
+            self._push()
+
+        def fail(message: str) -> None:
+            self._active_workers.discard(worker)
+            if not self._live:
+                return
+            index = next((i for i, current in enumerate(self._rows) if current is row), -1)
+            if index < 0:
+                return
+            self._rows[index] = LoadedEffect(row.entry, error=message)
+            self._emit_row_changed(index, [self.ERROR_ROLE, self.LOADING_ROLE])
+
+        worker.signals.finished.connect(finish)
+        worker.signals.failed.connect(fail)
+        QThreadPool.globalInstance().start(worker)
 
     def _emit_row_changed(self, index: int, roles: list[int]) -> None:
         model_index = self.index(index)
@@ -211,8 +270,7 @@ class EffectsModel(QAbstractListModel):
         if role == self.KIND_ROLE:
             return row.entry.kind
         if role == self.LABEL_ROLE:
-            spec = BUILT_INS.get(row.entry.kind)
-            return spec.label if spec else row.entry.kind
+            return label_for(row.entry.kind)
         if role == self.ENABLED_ROLE:
             return row.entry.enabled
         if role == self.SUMMARY_ROLE:
@@ -222,6 +280,8 @@ class EffectsModel(QAbstractListModel):
             return frames * 1000.0 / self._samplerate
         if role == self.ERROR_ROLE:
             return row.error or ""
+        if role == self.LOADING_ROLE:
+            return row.loading
         return None
 
     def roleNames(self) -> dict[int, bytes]:  # type: ignore[override]
@@ -232,4 +292,5 @@ class EffectsModel(QAbstractListModel):
             self.SUMMARY_ROLE: b"summary",
             self.LATENCY_MS_ROLE: b"latencyMs",
             self.ERROR_ROLE: b"errorText",
+            self.LOADING_ROLE: b"loading",
         }

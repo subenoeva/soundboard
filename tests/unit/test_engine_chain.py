@@ -122,7 +122,7 @@ def test_the_peaks_bracket_the_chain() -> None:
 
     # Enough blocks for the primed silence to drain out of the ring buffer and
     # the microphone signal to reach the callback.
-    backend.advance(8)
+    backend.advance(engine.config.target_fill_blocks + 2)
 
     # These two drive the MIC and OUT cards at the ends of the rack, so they have
     # to sit on opposite sides of the chain -- and the negative input proves the

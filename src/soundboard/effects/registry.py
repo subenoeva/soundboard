@@ -117,6 +117,20 @@ BUILT_INS: Mapping[str, EffectSpec] = MappingProxyType(
 )
 
 
+def catalog() -> list[dict[str, str]]:
+    """Every block the palette can add, including asynchronously built ones."""
+    rows = [{"kind": spec.kind, "label": spec.label} for spec in BUILT_INS.values()]
+    rows.append({"kind": "neural", "label": "Reducción neural"})
+    return rows
+
+
+def label_for(kind: str) -> str:
+    if kind == "neural":
+        return "Reducción neural"
+    spec = BUILT_INS.get(kind)
+    return spec.label if spec else kind
+
+
 def create(
     kind: str, params: Mapping[str, float] | None = None, *, samplerate: int = 48_000
 ) -> PedalEffect:

@@ -8,6 +8,8 @@ from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 
 from soundboard.audio.engine import EngineMetrics
 from soundboard.effects.chain import EffectChain
+from soundboard.effects.realtime_gc import collect as collect_realtime_garbage
+from soundboard.effects.realtime_gc import restore as restore_realtime_garbage
 
 
 class MeteredEngine(Protocol):
@@ -50,6 +52,7 @@ class EngineBridge(QObject):
 
     def stop(self) -> None:
         self._timer.stop()
+        restore_realtime_garbage()
 
     @Slot()
     def poll(self) -> None:
@@ -73,6 +76,7 @@ class EngineBridge(QObject):
             self._metrics_text = text
             self.metricsChanged.emit()
         self._engine.drain_retired()
+        collect_realtime_garbage()
 
     def _get_peak(self) -> float:
         return self._peak

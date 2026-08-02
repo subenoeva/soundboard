@@ -6,6 +6,7 @@ from pathlib import Path
 
 from soundboard.ui.effects_store import (
     EffectEntry,
+    LoadedEffect,
     build_effects,
     default_effects_path,
     load_effects,
@@ -58,6 +59,14 @@ def test_a_block_whose_kind_no_longer_exists_survives_as_an_error() -> None:
     assert built[1].effect is None
     assert built[1].error is not None
     assert "flanger" in built[1].error
+
+
+def test_the_neural_block_is_left_for_the_background_loader() -> None:
+    built = build_effects([EffectEntry(kind="neural", params={"mix": 0.7})])
+
+    assert built == [
+        LoadedEffect(EffectEntry(kind="neural", params={"mix": 0.7}), loading=True)
+    ]
 
 
 def test_the_chain_file_sits_beside_the_layout() -> None:

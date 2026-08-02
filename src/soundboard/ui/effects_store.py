@@ -36,6 +36,7 @@ class LoadedEffect:
     entry: EffectEntry
     effect: Effect | None = None
     error: str | None = None
+    loading: bool = False
 
 
 def build_effects(entries: Iterable[EffectEntry]) -> list[LoadedEffect]:
@@ -47,6 +48,9 @@ def build_effects(entries: Iterable[EffectEntry]) -> list[LoadedEffect]:
     """
     built = []
     for entry in entries:
+        if entry.kind == "neural":
+            built.append(LoadedEffect(entry, loading=True))
+            continue
         try:
             built.append(LoadedEffect(entry, effect=create(entry.kind, entry.params)))
         except KeyError as exc:
