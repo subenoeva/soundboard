@@ -14,6 +14,7 @@ from PySide6.QtCore import (
     QPersistentModelIndex,
     Qt,
     QThreadPool,
+    QUrl,
     Signal,
     Slot,
 )
@@ -95,6 +96,8 @@ class EffectsModel(QAbstractListModel):
     @Slot(str)
     def add_vst(self, plugin_path: str) -> None:
         """Append a VST3 path now; the plugin itself is built by the worker."""
+        if plugin_path.startswith("file:"):
+            plugin_path = str(Path(QUrl(plugin_path).toLocalFile()))
         if not plugin_path:
             return
         row = LoadedEffect(

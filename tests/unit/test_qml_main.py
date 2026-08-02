@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from PySide6.QtCore import QMetaObject, QObject, QPointF
+from PySide6.QtCore import QMetaObject, QObject, QPointF, QUrl
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickItem
 from PySide6.QtWidgets import QApplication
@@ -17,7 +17,7 @@ from soundboard.library.cache import SoundCache
 from soundboard.remote.fake_client import FakeRemoteClient
 from soundboard.ui.app import qml_root
 from soundboard.ui.controller import AppController
-from soundboard.ui.effects_store import EffectEntry, save_effects
+from soundboard.ui.effects_store import EffectEntry, load_effects, save_effects
 from tests.unit.test_controller import FakeEngine, FakeStore
 
 
@@ -176,6 +176,32 @@ def test_effect_palette_offers_a_vst3_file_picker(
     assert root.findChild(QObject, "effectVstButton") is not None
     assert root.findChild(QObject, "vstFileDialog") is not None
     qml_warnings = [w for w in warnings if ".qml" in w]
+    assert qml_warnings == []
+
+
+def test_accepting_the_vst3_picker_adds_the_selected_local_file(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    controller = make_controller(tmp_path)
+    controller.bootstrap()
+    engine, warnings = _load(controller)
+    controller.log_in("user@example.com", "password")
+    controller.apply_devices("mic", "out", 2, 3)
+    qapp.processEvents()
+    root = engine.rootObjects()[0]
+    dialog = root.findChild(QObject, "vstFileDialog")
+    plugin_path = tmp_path / "Voice.vst3"
+    plugin_path.touch()
+    assert dialog is not None
+    assert dialog.setProperty("selectedFile", QUrl.fromLocalFile(str(plugin_path)))
+
+    assert QMetaObject.invokeMethod(dialog, "accepted")
+    qapp.processEvents()
+
+    assert load_effects(tmp_path / "effects.json") == [
+        EffectEntry(kind="vst3", plugin_path=str(plugin_path))
+    ]
+    qml_warnings = [warning for warning in warnings if ".qml" in warning]
     assert qml_warnings == []
 
 

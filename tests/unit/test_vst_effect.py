@@ -72,6 +72,23 @@ def test_vst_parameters_keep_the_types_and_ranges_the_plugin_reports(tmp_path: P
     assert specs[2].choices == ("Clean", "Warm", "Bright")
 
 
+def test_boolean_parameters_use_the_type_declared_by_pedalboard(tmp_path: Path) -> None:
+    class WrappedBool:
+        def __init__(self, value: bool) -> None:
+            self._value = value
+
+        def __bool__(self) -> bool:
+            return self._value
+
+    plugin = FakePlugin()
+    plugin.bypass = WrappedBool(False)  # type: ignore[assignment]
+
+    effect, _ = _load(tmp_path, plugin)
+
+    assert effect.params()["bypass"] is False
+    assert effect.param_specs()[1].default is False
+
+
 def test_saved_vst_parameters_are_applied_after_loading(tmp_path: Path) -> None:
     effect, plugin = _load(tmp_path)
     path = tmp_path / "Example Voice FX.vst3"

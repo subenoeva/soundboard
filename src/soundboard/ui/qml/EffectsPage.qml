@@ -18,7 +18,7 @@ Item {
         nameFilters: ["Efectos VST3 (*.vst3)", "Todos los archivos (*)"]
         onAccepted: {
             if (App.effectsModel !== null)
-                App.effectsModel.add_vst(selectedFile.toLocalFile())
+                App.effectsModel.add_vst(selectedFile.toString())
         }
     }
 

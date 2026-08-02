@@ -129,10 +129,11 @@ class VstEffect:
 
     def _read(self, name: str) -> ParamValue:
         value = getattr(self._plugin, name)
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, str):
-            return value
+        parameter_type = self._plugin.parameters[name].type
+        if parameter_type is bool:
+            return bool(value)
+        if parameter_type is str:
+            return str(value)
         return float(value)
 
     def set_param(self, name: str, value: ParamValue) -> None:
