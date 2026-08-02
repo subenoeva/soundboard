@@ -83,6 +83,28 @@ def test_drift_controller_keeps_the_buffer_near_target() -> None:
     assert abs(engine.metrics.fill - target) <= CONFIG.blocksize
 
 
+def test_default_buffer_absorbs_bursty_input_callbacks() -> None:
+    """The input driver may deliver several blocks back-to-back after a quiet gap."""
+    backend = FakeBackend()
+    backend.input_source = lambda frames: _tone(frames)
+    engine = AudioEngine(backend, CONFIG)
+    engine.start()
+
+    input_stream = next(stream for stream in backend.streams if stream.is_input)
+    output_stream = next(stream for stream in backend.streams if not stream.is_input)
+
+    for tick in range(400):
+        out = np.zeros(
+            (output_stream.blocksize, output_stream.channels), dtype=np.float32
+        )
+        output_stream.callback(out)
+        if tick % 8 == 7:
+            for _ in range(8):
+                input_stream.callback(backend.input_source(input_stream.blocksize))
+
+    assert engine.metrics.underruns == 0
+
+
 def test_output_is_broadcast_to_every_channel() -> None:
     backend = FakeBackend()
     backend.input_source = lambda frames: _tone(frames)

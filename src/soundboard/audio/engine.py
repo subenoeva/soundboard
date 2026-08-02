@@ -22,7 +22,7 @@ class EngineConfig:
     input_device: int | None = None
     output_device: int | None = None
     output_channels: int = 1
-    target_fill_blocks: int = 2
+    target_fill_blocks: int = 8
     capacity_blocks: int = 16
 
 
