@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from soundboard.audio.engine import EngineMetrics
+from soundboard.effects.chain import EffectChain
 from soundboard.ui.engine_bridge import EngineBridge
 
 
@@ -10,9 +11,15 @@ class FakeEngine:
     def __init__(self) -> None:
         self.last_peak = 0.0
         self.states: list[tuple[int, float]] = []
+        self.retired: list[EffectChain] = []
 
     def voice_states(self) -> list[tuple[int, float]]:
         return self.states
+
+    def drain_retired(self) -> list[EffectChain]:
+        retired = self.retired[:]
+        self.retired.clear()
+        return retired
 
     @property
     def metrics(self) -> EngineMetrics:
@@ -44,3 +51,13 @@ def test_peak_changed_only_fires_on_change(qtbot: object) -> None:
     engine.last_peak = 0.3
     bridge.poll()
     assert len(fired) == 1
+
+
+def test_poll_drains_retired_chains(qtbot: object) -> None:
+    engine = FakeEngine()
+    bridge = EngineBridge(engine)
+    engine.retired.append(EffectChain())
+
+    bridge.poll()
+
+    assert engine.retired == []

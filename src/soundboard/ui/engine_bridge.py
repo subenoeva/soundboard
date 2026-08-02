@@ -7,6 +7,7 @@ from typing import Protocol
 from PySide6.QtCore import Property, QObject, QTimer, Signal, Slot
 
 from soundboard.audio.engine import EngineMetrics
+from soundboard.effects.chain import EffectChain
 
 
 class MeteredEngine(Protocol):
@@ -15,6 +16,7 @@ class MeteredEngine(Protocol):
     @property
     def metrics(self) -> EngineMetrics: ...
     def voice_states(self) -> list[tuple[int, float]]: ...
+    def drain_retired(self) -> list[EffectChain]: ...
 
 
 class EngineBridge(QObject):
@@ -51,6 +53,7 @@ class EngineBridge(QObject):
         if text != self._metrics_text:
             self._metrics_text = text
             self.metricsChanged.emit()
+        self._engine.drain_retired()
 
     def _get_peak(self) -> float:
         return self._peak

@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from soundboard.audio.fake_backend import FakeBackend
+from soundboard.effects.chain import EffectChain
 from soundboard.hotkeys import FakeHotkeyManager
 from soundboard.library.cache import SoundCache
 from soundboard.remote.fake_client import FakeRemoteClient
@@ -54,6 +55,9 @@ class FakeEngine:
         self.stopped = True
 
     def voice_states(self) -> list[tuple[int, float]]:
+        return []
+
+    def drain_retired(self) -> list[EffectChain]:
         return []
 
     @property
