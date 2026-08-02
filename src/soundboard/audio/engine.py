@@ -14,6 +14,7 @@ from soundboard.audio.mixer import Mixer
 from soundboard.audio.ringbuffer import RingBuffer
 from soundboard.audio.voice import Voice
 from soundboard.effects.chain import Effect, EffectChain, ParamChange
+from soundboard.effects.params import ParamValue
 
 
 @dataclass(frozen=True)
@@ -156,7 +157,7 @@ class AudioEngine:
         """
         self._commands.append(("chain", chain))
 
-    def set_param(self, effect: Effect, name: str, value: float) -> None:
+    def set_param(self, effect: Effect, name: str, value: ParamValue) -> None:
         """Move one knob on a live block. Safe to call from any thread.
 
         Queued rather than applied here for the reason ``ParamChange`` gives.

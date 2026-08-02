@@ -158,6 +158,27 @@ def test_effect_palette_uses_the_available_width(
     assert qml_warnings == []
 
 
+def test_effect_palette_offers_a_vst3_file_picker(
+    qapp: QApplication, tmp_path: Path
+) -> None:
+    controller = make_controller(tmp_path)
+    controller.bootstrap()
+    engine, warnings = _load(controller)
+    controller.log_in("user@example.com", "password")
+    controller.apply_devices("mic", "out", 2, 3)
+    qapp.processEvents()
+    root = engine.rootObjects()[0]
+    tabs = root.findChild(QObject, "boardTabs")
+    assert tabs is not None
+    tabs.setProperty("currentIndex", 1)
+    qapp.processEvents()
+
+    assert root.findChild(QObject, "effectVstButton") is not None
+    assert root.findChild(QObject, "vstFileDialog") is not None
+    qml_warnings = [w for w in warnings if ".qml" in w]
+    assert qml_warnings == []
+
+
 def test_selecting_an_effect_lays_out_its_parameter_panel(
     qapp: QApplication, qtbot: Any, tmp_path: Path
 ) -> None:

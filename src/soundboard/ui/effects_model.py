@@ -20,30 +20,19 @@ from PySide6.QtCore import (
 
 from soundboard.effects.chain import Effect, EffectChain
 from soundboard.effects.chain import Slot as ChainSlot
+from soundboard.effects.params import ParamValue
 from soundboard.effects.realtime_gc import enable as enable_realtime_gc
-from soundboard.effects.registry import catalog, create, label_for
+from soundboard.effects.registry import catalog, create
 from soundboard.ui.effect_worker import EffectLoadWorker, load_effect_entry
+from soundboard.ui.effects_presenter import adopted, parameter_rows, row_label, summary
 from soundboard.ui.effects_store import EffectEntry, LoadedEffect, save_effects
-
-
-def _adopted(row: LoadedEffect) -> LoadedEffect:
-    """Fill a saved row in from the block it produced.
-
-    A file can name fewer knobs than the block has -- written before one existed,
-    or edited by hand -- and the block came up with a real value for every one of
-    them. Taking those over now is what keeps the panel, the summary and the next
-    save agreeing with the plugin.
-    """
-    if row.effect is None:
-        return row
-    return replace(row, entry=replace(row.entry, params=row.effect.params()))
 
 
 class Engine(Protocol):
     """Chain-only view of the engine, kept narrow so a fake stays small."""
 
     def set_chain(self, chain: EffectChain) -> None: ...
-    def set_param(self, effect: Effect, name: str, value: float) -> None: ...
+    def set_param(self, effect: Effect, name: str, value: ParamValue) -> None: ...
 
 
 class EffectsModel(QAbstractListModel):
@@ -69,7 +58,7 @@ class EffectsModel(QAbstractListModel):
     ) -> None:
         super().__init__(parent)
         self._engine = engine
-        self._rows = [_adopted(row) for row in rows]
+        self._rows = [adopted(row) for row in rows]
         self._path = path
         self._samplerate = samplerate
         self._blocksize = blocksize
@@ -102,6 +91,20 @@ class EffectsModel(QAbstractListModel):
         self._rows.append(LoadedEffect(entry, effect=effect))
         self.endInsertRows()
         self._commit()
+
+    @Slot(str)
+    def add_vst(self, plugin_path: str) -> None:
+        """Append a VST3 path now; the plugin itself is built by the worker."""
+        if not plugin_path:
+            return
+        row = LoadedEffect(
+            EffectEntry(kind="vst3", plugin_path=plugin_path), loading=True
+        )
+        self.beginInsertRows(QModelIndex(), len(self._rows), len(self._rows))
+        self._rows.append(row)
+        self.endInsertRows()
+        self._commit()
+        self._start_loading(row)
 
     @Slot(int)
     def remove(self, index: int) -> None:
@@ -136,8 +139,8 @@ class EffectsModel(QAbstractListModel):
         self._emit_row_changed(index, [self.ENABLED_ROLE])
         self._commit()
 
-    @Slot(int, str, float)
-    def set_param(self, index: int, name: str, value: float) -> None:
+    @Slot(int, str, "QVariant")
+    def set_param(self, index: int, name: str, value: ParamValue) -> None:
         """Move one knob on the block at ``index``, and remember where it now sits.
 
         The value is clamped here as well as in the block because this is the copy
@@ -152,7 +155,7 @@ class EffectsModel(QAbstractListModel):
         spec = next((s for s in row.effect.param_specs() if s.name == name), None)
         if spec is None:
             return
-        value = spec.clamp(value)
+        value = spec.coerce(value)
         params = {**row.entry.params, name: value}
         self._rows[index] = replace(row, entry=replace(row.entry, params=params))
         self._engine.set_param(row.effect, name, value)
@@ -169,17 +172,7 @@ class EffectsModel(QAbstractListModel):
         row = self._rows[index]
         if row.effect is None:
             return []
-        return [
-            {
-                "name": spec.name,
-                "label": spec.label,
-                "minimum": spec.minimum,
-                "maximum": spec.maximum,
-                "value": row.entry.params.get(spec.name, spec.default),
-                "unit": spec.unit,
-            }
-            for spec in row.effect.param_specs()
-        ]
+        return parameter_rows(row)
 
     @Slot(result="QVariantList")
     def catalog(self) -> list[dict[str, str]]:
@@ -203,10 +196,17 @@ class EffectsModel(QAbstractListModel):
                 return
             if effect.kind == "neural":
                 enable_realtime_gc()
-            self._rows[index] = _adopted(LoadedEffect(row.entry, effect=effect))
+            self._rows[index] = adopted(LoadedEffect(row.entry, effect=effect))
             self._emit_row_changed(
                 index,
-                [self.SUMMARY_ROLE, self.LATENCY_MS_ROLE, self.ERROR_ROLE, self.LOADING_ROLE],
+                [
+                    self.LABEL_ROLE,
+                    self.ENABLED_ROLE,
+                    self.SUMMARY_ROLE,
+                    self.LATENCY_MS_ROLE,
+                    self.ERROR_ROLE,
+                    self.LOADING_ROLE,
+                ],
             )
             self._push()
 
@@ -218,7 +218,9 @@ class EffectsModel(QAbstractListModel):
             if index < 0:
                 return
             self._rows[index] = LoadedEffect(row.entry, error=message)
-            self._emit_row_changed(index, [self.ERROR_ROLE, self.LOADING_ROLE])
+            self._emit_row_changed(
+                index, [self.ENABLED_ROLE, self.ERROR_ROLE, self.LOADING_ROLE]
+            )
 
         worker.signals.finished.connect(finish)
         worker.signals.failed.connect(fail)
@@ -243,16 +245,6 @@ class EffectsModel(QAbstractListModel):
             )
         )
 
-    def _summary(self, row: LoadedEffect) -> str:
-        if row.effect is None:
-            return ""
-        params = row.entry.params
-        return " · ".join(
-            f"{spec.label} {params.get(spec.name, spec.default):g}"
-            f"{' ' + spec.unit if spec.unit else ''}"
-            for spec in row.effect.param_specs()
-        )
-
     def rowCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
         if parent and parent.isValid():
             return 0
@@ -270,11 +262,11 @@ class EffectsModel(QAbstractListModel):
         if role == self.KIND_ROLE:
             return row.entry.kind
         if role == self.LABEL_ROLE:
-            return label_for(row.entry.kind)
+            return row_label(row)
         if role == self.ENABLED_ROLE:
-            return row.entry.enabled
+            return row.entry.enabled and row.effect is not None
         if role == self.SUMMARY_ROLE:
-            return self._summary(row)
+            return summary(row)
         if role == self.LATENCY_MS_ROLE:
             frames = row.effect.latency_frames if row.effect else 0
             return frames * 1000.0 / self._samplerate

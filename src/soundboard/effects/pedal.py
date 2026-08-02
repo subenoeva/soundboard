@@ -7,7 +7,7 @@ from collections.abc import Iterable
 import numpy as np
 from pedalboard import Plugin
 
-from soundboard.effects.params import ParamSpec
+from soundboard.effects.params import ParamSpec, ParamValue
 
 
 class PedalEffect:
@@ -37,14 +37,17 @@ class PedalEffect:
     def reset(self) -> None:
         self._plugin.reset()
 
-    def set_param(self, name: str, value: float) -> None:
+    def set_param(self, name: str, value: ParamValue) -> None:
         """Move one knob. Call it from the Qt thread, never from the callback."""
         spec = self._specs.get(name)
         if spec is None:
             raise KeyError(f"{self.kind!r} has no parameter {name!r}")
-        setattr(self._plugin, name, spec.clamp(value))
+        normalized = spec.coerce(value)
+        if not isinstance(normalized, float):
+            raise TypeError(f"{self.kind!r} parameter {name!r} is not numeric")
+        setattr(self._plugin, name, normalized)
 
-    def params(self) -> dict[str, float]:
+    def params(self) -> dict[str, ParamValue]:
         """Every knob's current position, read off the plugin, for persistence."""
         return {name: float(getattr(self._plugin, name)) for name in self._specs}
 

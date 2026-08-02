@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QObject, QPointF
+from PySide6.QtCore import QCoreApplication, QObject, QPointF
 from PySide6.QtQml import QQmlComponent, QQmlEngine
 from PySide6.QtQuick import QQuickItem
 
@@ -28,6 +28,15 @@ def _instantiate(name: str) -> tuple[QQmlComponent, QObject]:
     assert obj is not None, [e.toString() for e in component.errors()]
     QQmlEngine.setObjectOwnership(obj, QQmlEngine.ObjectOwnership.CppOwnership)
     return component, obj
+
+
+def _find_visual_child(root: QQuickItem, name: str) -> QQuickItem | None:
+    for child in root.childItems():
+        if child.objectName() == name:
+            return child
+        if found := _find_visual_child(child, name):
+            return found
+    return None
 
 
 def test_components_exist() -> None:
@@ -192,3 +201,27 @@ def test_effect_block_drag_handle_does_not_cover_the_bypass_switch(qapp: object)
         block, QPointF(drag_handle.width(), 0)
     ).x()
     assert handle_right <= bypass_left
+
+
+def test_parameter_panel_draws_boolean_and_choice_vst_parameters(qapp: object) -> None:
+    _component, panel = _instantiate("ParamPanel.qml")
+    panel.setProperty("width", 600)
+    panel.setProperty("height", 88)
+    panel.setProperty(
+        "parameters",
+        [
+            {"name": "bypass", "label": "Bypass", "type": "bool", "value": False},
+            {
+                "name": "mode",
+                "label": "Mode",
+                "type": "choice",
+                "value": "Clean",
+                "choices": ["Clean", "Warm"],
+            },
+        ],
+    )
+    QCoreApplication.processEvents()
+
+    assert isinstance(panel, QQuickItem)
+    assert _find_visual_child(panel, "boolParamControl") is not None
+    assert _find_visual_child(panel, "choiceParamControl") is not None

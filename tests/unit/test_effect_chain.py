@@ -3,7 +3,7 @@ from collections.abc import Callable
 import numpy as np
 
 from soundboard.effects.chain import EffectChain, Slot
-from soundboard.effects.params import ParamSpec
+from soundboard.effects.params import ParamSpec, ParamValue
 
 
 class FakeEffect:
@@ -23,7 +23,7 @@ class FakeEffect:
         self.kind = kind
         self._op = op
         self._latency_frames = latency_frames
-        self._params: dict[str, float] = {}
+        self._params: dict[str, ParamValue] = {}
         self.calls = 0
         self.resets = 0
 
@@ -34,10 +34,10 @@ class FakeEffect:
     def reset(self) -> None:
         self.resets += 1
 
-    def set_param(self, name: str, value: float) -> None:
+    def set_param(self, name: str, value: ParamValue) -> None:
         self._params[name] = value
 
-    def params(self) -> dict[str, float]:
+    def params(self) -> dict[str, ParamValue]:
         return dict(self._params)
 
     def param_specs(self) -> tuple[ParamSpec, ...]:

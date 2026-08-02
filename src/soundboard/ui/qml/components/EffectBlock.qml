@@ -50,6 +50,7 @@ Rectangle {
                 id: bypass
                 objectName: "effectBypass"
                 checked: root.effectEnabled
+                enabled: !root.loading && root.errorText === ""
                 onClicked: root.toggleRequested(checked)
             }
         }

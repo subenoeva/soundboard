@@ -8,7 +8,7 @@ import pytest
 from soundboard.audio.engine import AudioEngine, EngineConfig
 from soundboard.audio.fake_backend import FakeBackend
 from soundboard.effects.chain import EffectChain
-from soundboard.effects.params import ParamSpec
+from soundboard.effects.params import ParamSpec, ParamValue
 
 
 class ConstantEffect:
@@ -31,10 +31,10 @@ class ConstantEffect:
     def reset(self) -> None:
         pass
 
-    def set_param(self, name: str, value: float) -> None:
-        self._value = value
+    def set_param(self, name: str, value: ParamValue) -> None:
+        self._value = float(value)
 
-    def params(self) -> dict[str, float]:
+    def params(self) -> dict[str, ParamValue]:
         return {"value": self._value}
 
     def param_specs(self) -> tuple[ParamSpec, ...]:

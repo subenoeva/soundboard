@@ -20,6 +20,11 @@ def test_saved_effects_come_back_unchanged(tmp_path: Path) -> None:
     entries = [
         EffectEntry(kind="highpass", params={"cutoff_frequency_hz": 120.0}),
         EffectEntry(kind="reverb", enabled=False, params={"wet_level": 0.2}),
+        EffectEntry(
+            kind="vst3",
+            plugin_path="C:/VST3/Voice.vst3",
+            params={"bypass": True, "mode": "Warm"},
+        ),
     ]
 
     save_effects(path, entries)
@@ -67,6 +72,12 @@ def test_the_neural_block_is_left_for_the_background_loader() -> None:
     assert built == [
         LoadedEffect(EffectEntry(kind="neural", params={"mix": 0.7}), loading=True)
     ]
+
+
+def test_a_vst_block_is_left_for_the_background_loader() -> None:
+    entry = EffectEntry(kind="vst3", plugin_path="C:/VST3/Voice.vst3")
+
+    assert build_effects([entry]) == [LoadedEffect(entry, loading=True)]
 
 
 def test_the_chain_file_sits_beside_the_layout() -> None:

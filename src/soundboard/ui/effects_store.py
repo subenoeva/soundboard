@@ -17,6 +17,7 @@ from typing import Any
 import platformdirs
 
 from soundboard.effects.chain import Effect
+from soundboard.effects.params import ParamValue
 from soundboard.effects.registry import create
 
 
@@ -25,8 +26,9 @@ class EffectEntry:
     """One saved block: what it is, whether it runs, and where its knobs sit."""
 
     kind: str
+    plugin_path: str | None = None
     enabled: bool = True
-    params: dict[str, float] = field(default_factory=dict)
+    params: dict[str, ParamValue] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -48,7 +50,7 @@ def build_effects(entries: Iterable[EffectEntry]) -> list[LoadedEffect]:
     """
     built = []
     for entry in entries:
-        if entry.kind == "neural":
+        if entry.kind in {"neural", "vst3"}:
             built.append(LoadedEffect(entry, loading=True))
             continue
         try:
@@ -59,14 +61,30 @@ def build_effects(entries: Iterable[EffectEntry]) -> list[LoadedEffect]:
 
 
 def _entry_to_dict(entry: EffectEntry) -> dict[str, Any]:
-    return {"kind": entry.kind, "enabled": entry.enabled, "params": dict(entry.params)}
+    return {
+        "kind": entry.kind,
+        "plugin_path": entry.plugin_path,
+        "enabled": entry.enabled,
+        "params": dict(entry.params),
+    }
+
+
+def _param_value(value: Any) -> ParamValue:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (int, float)):
+        return float(value)
+    raise TypeError(f"unsupported effect parameter value {value!r}")
 
 
 def _entry_from_dict(data: dict[str, Any]) -> EffectEntry:
     return EffectEntry(
         kind=data["kind"],
+        plugin_path=data.get("plugin_path"),
         enabled=data.get("enabled", True),
-        params={str(name): float(value) for name, value in data.get("params", {}).items()},
+        params={str(name): _param_value(value) for name, value in data.get("params", {}).items()},
     )
 
 

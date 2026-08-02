@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import "."
 import "components"
@@ -9,6 +10,17 @@ Item {
     property int selectedIndex: -1
     property string selectedLabel: ""
     property var selectedParameters: []
+
+    FileDialog {
+        id: vstFileDialog
+        objectName: "vstFileDialog"
+        title: "Seleccionar efecto VST3"
+        nameFilters: ["Efectos VST3 (*.vst3)", "Todos los archivos (*)"]
+        onAccepted: {
+            if (App.effectsModel !== null)
+                App.effectsModel.add_vst(selectedFile.toLocalFile())
+        }
+    }
 
     function selectEffect(index, label) {
         selectedIndex = index
@@ -229,6 +241,7 @@ Item {
                     }
                 })
             }
+            onVstRequested: vstFileDialog.open()
         }
     }
 }

@@ -8,7 +8,7 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 
-from soundboard.effects.params import ParamSpec
+from soundboard.effects.params import ParamSpec, ParamValue
 
 
 @runtime_checkable
@@ -33,9 +33,9 @@ class Effect(Protocol):
 
     def reset(self) -> None: ...
 
-    def set_param(self, name: str, value: float) -> None: ...
+    def set_param(self, name: str, value: ParamValue) -> None: ...
 
-    def params(self) -> dict[str, float]: ...
+    def params(self) -> dict[str, ParamValue]: ...
 
     def param_specs(self) -> tuple[ParamSpec, ...]: ...
 
@@ -68,7 +68,7 @@ class ParamChange:
 
     effect: Effect
     name: str
-    value: float
+    value: ParamValue
 
 
 class EffectChain:

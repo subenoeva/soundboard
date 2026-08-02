@@ -16,6 +16,7 @@ import pytest
 
 from soundboard.audio.fake_backend import FakeBackend
 from soundboard.effects.chain import Effect, EffectChain
+from soundboard.effects.params import ParamValue
 from soundboard.hotkeys import FakeHotkeyManager
 from soundboard.library.cache import SoundCache
 from soundboard.remote.fake_client import FakeRemoteClient
@@ -64,7 +65,7 @@ class FakeEngine:
     def set_chain(self, chain: EffectChain) -> None:
         self.chains.append(chain)
 
-    def set_param(self, effect: Effect, name: str, value: float) -> None:
+    def set_param(self, effect: Effect, name: str, value: ParamValue) -> None:
         effect.set_param(name, value)
 
     def voice_states(self) -> list[tuple[int, float]]:

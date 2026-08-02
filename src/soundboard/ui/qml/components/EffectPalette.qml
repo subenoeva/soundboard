@@ -7,6 +7,7 @@ Rectangle {
     objectName: "effectPalette"
     property var catalog: []
     signal effectPicked(string kind)
+    signal vstRequested()
 
     implicitHeight: 62
     radius: Theme.radiusPad
@@ -44,6 +45,13 @@ Rectangle {
                     text: modelData.label || ""
                     onClicked: root.effectPicked(modelData.kind || "")
                 }
+            }
+
+            Button {
+                objectName: "effectVstButton"
+                anchors.verticalCenter: parent.verticalCenter
+                text: "VST3…"
+                onClicked: root.vstRequested()
             }
         }
     }

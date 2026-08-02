@@ -59,4 +59,5 @@ def test_every_default_sits_inside_its_declared_range(kind: str) -> None:
     for spec in BUILT_INS[kind].params:
         # The slider is drawn from minimum/maximum: a default outside them would
         # come up pinned to an end and jump the moment the user touched it.
+        assert isinstance(spec.default, float)
         assert spec.minimum <= spec.default <= spec.maximum, spec.name

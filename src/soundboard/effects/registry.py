@@ -22,7 +22,7 @@ from pedalboard import (
     Reverb,
 )
 
-from soundboard.effects.params import ParamSpec
+from soundboard.effects.params import ParamSpec, ParamValue
 from soundboard.effects.pedal import PedalEffect
 
 
@@ -132,7 +132,7 @@ def label_for(kind: str) -> str:
 
 
 def create(
-    kind: str, params: Mapping[str, float] | None = None, *, samplerate: int = 48_000
+    kind: str, params: Mapping[str, ParamValue] | None = None, *, samplerate: int = 48_000
 ) -> PedalEffect:
     """Build one block, its declared defaults applied and then ``params`` on top.
 

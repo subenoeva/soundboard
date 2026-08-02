@@ -21,7 +21,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from soundboard.effects.params import ParamSpec
+from soundboard.effects.params import ParamSpec, ParamValue
 
 _SAMPLE_RATE = 48_000
 _WINDOW_FRAMES = 960
@@ -130,7 +130,7 @@ class NeuralEffect:
         self._costs = np.zeros(_COST_HISTORY, dtype=np.float64)
         self._cost_count = 0
         self._cost_cursor = 0
-        self._mix = _MIX.default
+        self._mix: float = 1.0
         self._input_length: int = 0
         self._state: np.ndarray = runtime.initial_state.copy()
         self.reset()
@@ -203,12 +203,15 @@ class NeuralEffect:
         self._wet_fifo.reset()
         self._dry_fifo.reset()
 
-    def set_param(self, name: str, value: float) -> None:
+    def set_param(self, name: str, value: ParamValue) -> None:
         if name != _MIX.name:
             raise KeyError(f"{self.kind!r} has no parameter {name!r}")
-        self._mix = _MIX.clamp(value)
+        normalized = _MIX.coerce(value)
+        if not isinstance(normalized, float):
+            raise TypeError("neural mix is not numeric")
+        self._mix = normalized
 
-    def params(self) -> dict[str, float]:
+    def params(self) -> dict[str, ParamValue]:
         return {_MIX.name: self._mix}
 
     def param_specs(self) -> tuple[ParamSpec, ...]:
@@ -262,7 +265,7 @@ def _build_runtime(model_path: Path) -> RuntimeModel:
 
 
 def load_neural(
-    model_path: Path, *, blocksize: int, params: Mapping[str, float] | None = None
+    model_path: Path, *, blocksize: int, params: Mapping[str, ParamValue] | None = None
 ) -> NeuralEffect:
     """Build the expensive ONNX session. Call this from an effect-load worker."""
     effect = NeuralEffect(_build_runtime(model_path), blocksize=blocksize)

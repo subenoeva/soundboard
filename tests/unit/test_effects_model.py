@@ -10,6 +10,7 @@ import pytest
 from PySide6.QtCore import QThreadPool
 
 from soundboard.effects.chain import Effect, EffectChain
+from soundboard.effects.params import ParamSpec, ParamValue
 from soundboard.effects.registry import BUILT_INS
 from soundboard.ui.effects_model import EffectsModel
 from soundboard.ui.effects_store import (
@@ -25,12 +26,12 @@ class FakeEngine:
 
     def __init__(self) -> None:
         self.chains: list[EffectChain] = []
-        self.param_calls: list[tuple[Effect, str, float]] = []
+        self.param_calls: list[tuple[Effect, str, ParamValue]] = []
 
     def set_chain(self, chain: EffectChain) -> None:
         self.chains.append(chain)
 
-    def set_param(self, effect: Effect, name: str, value: float) -> None:
+    def set_param(self, effect: Effect, name: str, value: ParamValue) -> None:
         self.param_calls.append((effect, name, value))
         effect.set_param(name, value)
 
@@ -254,6 +255,8 @@ def test_the_parameter_panel_reads_the_knobs_off_the_block(qtbot: Any, tmp_path:
             "maximum": 500.0,
             "value": 120.0,
             "unit": "Hz",
+            "type": "float",
+            "choices": [],
         }
     ]
 
@@ -359,6 +362,7 @@ def test_a_deferred_load_failure_stays_visible_on_its_row(
     qtbot.waitUntil(lambda: model.data(row, EffectsModel.LOADING_ROLE) is False)
 
     assert "model file is missing" in model.data(row, EffectsModel.ERROR_ROLE)
+    assert model.data(row, EffectsModel.ENABLED_ROLE) is False
     assert model.rowCount() == 1
 
 
@@ -410,6 +414,62 @@ def test_adding_neural_persists_the_loading_row_before_it_finishes(
     )
 
 
+def test_adding_a_vst_persists_its_path_and_loads_it_in_the_worker(
+    qtbot: Any, tmp_path: Path
+) -> None:
+    effect = _TypedVstEffect()
+    model = EffectsModel(
+        FakeEngine(),
+        [],
+        tmp_path / "effects.json",
+        load_effect=lambda entry, blocksize: effect,
+    )
+    path = tmp_path / "Voice.vst3"
+
+    model.add_vst(str(path))
+
+    assert load_effects(tmp_path / "effects.json") == [
+        EffectEntry(kind="vst3", plugin_path=str(path))
+    ]
+    assert model.data(model.index(0), EffectsModel.LOADING_ROLE) is True
+    assert QThreadPool.globalInstance().waitForDone(5000)
+    qtbot.waitUntil(
+        lambda: model.data(model.index(0), EffectsModel.LOADING_ROLE) is False
+    )
+    assert model.data(model.index(0), EffectsModel.LABEL_ROLE) == "Voice shaper"
+
+
+def test_the_parameter_panel_receives_vst_parameter_types(qtbot: Any, tmp_path: Path) -> None:
+    model = EffectsModel(
+        FakeEngine(),
+        [LoadedEffect(EffectEntry(kind="vst3"), effect=_TypedVstEffect())],
+        tmp_path / "effects.json",
+    )
+
+    assert model.param_specs(0) == [
+        {
+            "name": "bypass",
+            "label": "Bypass",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "value": False,
+            "unit": "",
+            "type": "bool",
+            "choices": [],
+        },
+        {
+            "name": "mode",
+            "label": "Mode",
+            "minimum": 0.0,
+            "maximum": 2.0,
+            "value": "Clean",
+            "unit": "",
+            "type": "choice",
+            "choices": ["Clean", "Warm", "Bright"],
+        },
+    ]
+
+
 class _DelayedEffect:
     """A block that delays the signal, which none of the built-ins do."""
 
@@ -424,10 +484,10 @@ class _DelayedEffect:
     def reset(self) -> None:
         pass
 
-    def set_param(self, name: str, value: float) -> None:
+    def set_param(self, name: str, value: ParamValue) -> None:
         pass
 
-    def params(self) -> dict[str, float]:
+    def params(self) -> dict[str, ParamValue]:
         return {}
 
     def param_specs(self) -> tuple[Any, ...]:
@@ -436,3 +496,41 @@ class _DelayedEffect:
     @property
     def latency_frames(self) -> int:
         return self._latency_frames
+
+
+class _TypedVstEffect:
+    kind = "vst3"
+    label = "Voice shaper"
+
+    def __init__(self) -> None:
+        self._params: dict[str, ParamValue] = {"bypass": False, "mode": "Clean"}
+
+    def process(self, block: Any) -> None:
+        pass
+
+    def reset(self) -> None:
+        pass
+
+    def set_param(self, name: str, value: ParamValue) -> None:
+        self._params[name] = value
+
+    def params(self) -> dict[str, ParamValue]:
+        return dict(self._params)
+
+    def param_specs(self) -> tuple[ParamSpec, ...]:
+        return (
+            ParamSpec("bypass", "Bypass", 0.0, 1.0, False, type="bool"),
+            ParamSpec(
+                "mode",
+                "Mode",
+                0.0,
+                2.0,
+                "Clean",
+                type="choice",
+                choices=("Clean", "Warm", "Bright"),
+            ),
+        )
+
+    @property
+    def latency_frames(self) -> int:
+        return 0
