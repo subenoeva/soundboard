@@ -16,8 +16,12 @@ class ConstantEffect:
 
     kind = "constant"
 
-    def __init__(self, value: float) -> None:
+    def __init__(
+        self, value: float, *, latency_frames: int = 0, cost_ms: float = 0.0
+    ) -> None:
         self._value = value
+        self._latency_frames = latency_frames
+        self.cost_ms = cost_ms
         self.calls = 0
 
     def process(self, block: np.ndarray) -> None:
@@ -38,7 +42,7 @@ class ConstantEffect:
 
     @property
     def latency_frames(self) -> int:
-        return 0
+        return self._latency_frames
 
 
 def _running_engine() -> tuple[AudioEngine, FakeBackend]:
@@ -125,4 +129,16 @@ def test_the_peaks_bracket_the_chain() -> None:
     # peak is an absolute value, not a maximum.
     assert engine.input_peak == pytest.approx(0.2, abs=0.01)
     assert engine.chain_peak == pytest.approx(0.05, abs=0.01)
+    engine.stop()
+
+
+def test_the_active_chain_reports_its_latency_and_declared_cost() -> None:
+    engine, backend = _running_engine()
+    effect = ConstantEffect(0.1, latency_frames=960, cost_ms=1.25)
+    engine.set_chain(EffectChain([effect]))
+
+    backend.advance(1)
+
+    assert engine.chain_latency_ms == 20.0
+    assert engine.chain_cost_ms == 1.25
     engine.stop()

@@ -10,6 +10,10 @@ from soundboard.ui.engine_bridge import EngineBridge
 class FakeEngine:
     def __init__(self) -> None:
         self.last_peak = 0.0
+        self.input_peak = 0.0
+        self.chain_peak = 0.0
+        self.chain_latency_ms = 0.0
+        self.chain_cost_ms = 0.0
         self.states: list[tuple[int, float]] = []
         self.retired: list[EffectChain] = []
 
@@ -61,3 +65,19 @@ def test_poll_drains_retired_chains(qtbot: object) -> None:
     bridge.poll()
 
     assert engine.retired == []
+
+
+def test_poll_publishes_the_effects_rack_metrics(qtbot: object) -> None:
+    engine = FakeEngine()
+    bridge = EngineBridge(engine)
+    engine.input_peak = 0.2
+    engine.chain_peak = 0.1
+    engine.chain_latency_ms = 20.0
+    engine.chain_cost_ms = 1.25
+
+    bridge.poll()
+
+    assert bridge.inputPeak == 0.2  # type: ignore[comparison-overlap]
+    assert bridge.chainPeak == 0.1  # type: ignore[comparison-overlap]
+    assert bridge.chainLatencyMs == 20.0  # type: ignore[comparison-overlap]
+    assert bridge.chainCostMs == 1.25  # type: ignore[comparison-overlap]

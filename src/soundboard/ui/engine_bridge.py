@@ -14,6 +14,14 @@ class MeteredEngine(Protocol):
     @property
     def last_peak(self) -> float: ...
     @property
+    def input_peak(self) -> float: ...
+    @property
+    def chain_peak(self) -> float: ...
+    @property
+    def chain_latency_ms(self) -> float: ...
+    @property
+    def chain_cost_ms(self) -> float: ...
+    @property
     def metrics(self) -> EngineMetrics: ...
     def voice_states(self) -> list[tuple[int, float]]: ...
     def drain_retired(self) -> list[EffectChain]: ...
@@ -22,6 +30,7 @@ class MeteredEngine(Protocol):
 class EngineBridge(QObject):
     peakChanged = Signal()
     metricsChanged = Signal()
+    rackMetricsChanged = Signal()
     voice_states_updated = Signal(object)
 
     def __init__(
@@ -30,6 +39,7 @@ class EngineBridge(QObject):
         super().__init__(parent)
         self._engine = engine
         self._peak = 0.0
+        self._rack_metrics = (0.0, 0.0, 0.0, 0.0)
         self._metrics_text = ""
         self._timer = QTimer(self)
         self._timer.setInterval(interval_ms)
@@ -47,6 +57,15 @@ class EngineBridge(QObject):
         if peak != self._peak:
             self._peak = peak
             self.peakChanged.emit()
+        rack_metrics = (
+            float(self._engine.input_peak),
+            float(self._engine.chain_peak),
+            float(self._engine.chain_latency_ms),
+            float(self._engine.chain_cost_ms),
+        )
+        if rack_metrics != self._rack_metrics:
+            self._rack_metrics = rack_metrics
+            self.rackMetricsChanged.emit()
         self.voice_states_updated.emit(self._engine.voice_states())
         m = self._engine.metrics
         text = f"underruns {m.underruns} · fill {m.fill} · voces {m.active_voices}"
@@ -61,5 +80,21 @@ class EngineBridge(QObject):
     def _get_metrics_text(self) -> str:
         return self._metrics_text
 
+    def _get_input_peak(self) -> float:
+        return self._rack_metrics[0]
+
+    def _get_chain_peak(self) -> float:
+        return self._rack_metrics[1]
+
+    def _get_chain_latency_ms(self) -> float:
+        return self._rack_metrics[2]
+
+    def _get_chain_cost_ms(self) -> float:
+        return self._rack_metrics[3]
+
     peak = Property(float, _get_peak, notify=peakChanged)
     metricsText = Property(str, _get_metrics_text, notify=metricsChanged)
+    inputPeak = Property(float, _get_input_peak, notify=rackMetricsChanged)
+    chainPeak = Property(float, _get_chain_peak, notify=rackMetricsChanged)
+    chainLatencyMs = Property(float, _get_chain_latency_ms, notify=rackMetricsChanged)
+    chainCostMs = Property(float, _get_chain_cost_ms, notify=rackMetricsChanged)

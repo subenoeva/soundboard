@@ -5,8 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, QPointF
 from PySide6.QtQml import QQmlComponent, QQmlEngine
+from PySide6.QtQuick import QQuickItem
 
 QML_DIR = Path(__file__).parents[2] / "src" / "soundboard" / "ui" / "qml"
 
@@ -33,13 +34,14 @@ def test_components_exist() -> None:
     names = {p.name for p in COMPONENTS}
     assert {"ClipPad.qml", "HeaderBar.qml", "VUMeter.qml", "Toast.qml",
             "LibraryPopup.qml", "ShortcutPopup.qml", "ColorPopup.qml",
-            "UpdateBanner.qml"} <= names
+            "UpdateBanner.qml", "EffectBlock.qml", "EffectPalette.qml",
+            "ParamPanel.qml", "ParamSlider.qml"} <= names
 
 
 def test_views_exist() -> None:
     names = {p.name for p in QML_DIR.glob("*.qml")}
     assert {"Main.qml", "LoginView.qml", "DeviceSetupView.qml",
-            "BoardView.qml", "Theme.qml"} <= names
+            "BoardView.qml", "GridPage.qml", "EffectsPage.qml", "Theme.qml"} <= names
 
 
 @pytest.mark.parametrize("qml_file", COMPONENTS, ids=lambda p: p.name)
@@ -154,3 +156,16 @@ def test_clip_pad_wraps_the_shortcut_in_a_badge(qapp: object) -> None:
     # Capped to the pad's inner width, which is what makes the label elide rather
     # than spill out of the pad.
     assert badge.property("width") <= 120 - 16
+
+
+def test_effect_block_drag_handle_does_not_cover_the_bypass_switch(qapp: object) -> None:
+    _component, block = _instantiate("EffectBlock.qml")
+    block.setProperty("width", 166)
+    drag_handle = block.findChild(QObject, "effectDragHandle")
+    bypass = block.findChild(QObject, "effectBypass")
+
+    assert isinstance(block, QQuickItem)
+    assert isinstance(drag_handle, QQuickItem)
+    assert isinstance(bypass, QQuickItem)
+    bypass_left = bypass.mapToItem(block, QPointF()).x()
+    assert drag_handle.x() + drag_handle.width() <= bypass_left

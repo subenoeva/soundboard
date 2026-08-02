@@ -20,6 +20,8 @@ from soundboard.library.cache import SoundCache
 from soundboard.remote import auth
 from soundboard.remote.models import RemoteClient, Session
 from soundboard.ui import session_actions, update_actions
+from soundboard.ui.effects_model import EffectsModel
+from soundboard.ui.effects_store import build_effects, default_effects_path, load_effects
 from soundboard.ui.engine_bridge import EngineBridge
 from soundboard.ui.engine_factory import Engine, Store, build_engine
 from soundboard.ui.grid_model import GridModel
@@ -43,6 +45,7 @@ class AppController(QObject):
     setupErrorChanged = Signal()
     devicesChanged = Signal()
     gridModelChanged = Signal()
+    effectsModelChanged = Signal()
     bridgeChanged = Signal()
     toast = Signal(str)
 
@@ -55,6 +58,7 @@ class AppController(QObject):
         hotkeys: HotkeyManager,
         cache: SoundCache,
         layout_path: Path,
+        effects_path: Path | None = None,
         engine_factory: Callable[[GridLayout], Engine] | None = None,
         update_service: UpdateService | None = None,
         parent: QObject | None = None,
@@ -66,6 +70,7 @@ class AppController(QObject):
         self._hotkeys = hotkeys
         self._cache = cache
         self._layout_path = layout_path
+        self._effects_path = effects_path or default_effects_path()
         self._engine_factory: Callable[[GridLayout], Engine] = engine_factory or (
             lambda layout: build_engine(self._backend, layout)
         )
@@ -77,6 +82,7 @@ class AppController(QObject):
         self._layout: GridLayout | None = None
         self._engine: Engine | None = None
         self._grid: GridModel | None = None
+        self._effects: EffectsModel | None = None
         self._bridge: EngineBridge | None = None
         self._library = LibraryModel(client, parent=self)
         self._update = update_actions.build_model(self, update_service)
@@ -188,6 +194,7 @@ class AppController(QObject):
     def _start_engine(self) -> bool:
         assert self._layout is not None and self._session is not None
         try:
+            effects = build_effects(load_effects(self._effects_path))
             engine = self._engine_factory(self._layout)
         except Exception as exc:
             self._setup_error = str(exc)
@@ -202,10 +209,13 @@ class AppController(QObject):
             self._layout, self._layout_path, parent=self,
         )
         self._grid.toast.connect(self.toast)
+        self._effects = EffectsModel(engine, effects, self._effects_path, parent=self)
+        self._effects.toast.connect(self.toast)
         self._bridge = EngineBridge(engine, parent=self)
         self._bridge.voice_states_updated.connect(self._grid.apply_voice_states)
         self._bridge.start()
         self.gridModelChanged.emit()
+        self.effectsModelChanged.emit()
         self.bridgeChanged.emit()
         self._set_view("board")
         return True
@@ -213,10 +223,10 @@ class AppController(QObject):
     def _teardown_engine(self) -> None:
         """Retire the whole engine/model stack, leaving nothing that can still act.
 
-        Both models are parented to this controller, so clearing the attribute only
-        drops the Python reference — the C++ object stays alive and functional. They
-        are detached (so in-flight work is ignored) and notified as gone before the
-        deferred delete, which only runs once QML has rebound off them.
+        The UI models are parented to this controller, so clearing an attribute only
+        drops the Python reference — the C++ object stays alive and functional. Each
+        property is notified as gone before deferred deletion; the grid is detached
+        as well so its in-flight work cannot act after QML has rebound off it.
         """
         if self._bridge is not None:
             bridge, self._bridge = self._bridge, None
@@ -231,6 +241,10 @@ class AppController(QObject):
             grid.detach()
             self.gridModelChanged.emit()
             grid.deleteLater()
+        if self._effects is not None:
+            effects, self._effects = self._effects, None
+            self.effectsModelChanged.emit()
+            effects.deleteLater()
         if self._engine is not None:
             self._engine.stop()
             self._engine = None
@@ -276,6 +290,9 @@ class AppController(QObject):
     def _get_grid_model(self) -> QObject | None:
         return self._grid
 
+    def _get_effects_model(self) -> QObject | None:
+        return self._effects
+
     def _get_bridge(self) -> QObject | None:
         return self._bridge
 
@@ -302,6 +319,7 @@ class AppController(QObject):
         "QVariantList", _get_output_devices, notify=devicesChanged  # type: ignore[arg-type]
     )
     gridModel = Property(QObject, _get_grid_model, notify=gridModelChanged)
+    effectsModel = Property(QObject, _get_effects_model, notify=effectsModelChanged)
     bridge = Property(QObject, _get_bridge, notify=bridgeChanged)
     libraryModel = Property(QObject, _get_library_model, constant=True)
     updateModel = Property(QObject, _get_update_model, constant=True)

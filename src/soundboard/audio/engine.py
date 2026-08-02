@@ -191,6 +191,25 @@ class AudioEngine:
         """Microphone level after the chain; drives the rack's OUT card."""
         return self._chain_peak
 
+    @property
+    def chain_latency_ms(self) -> float:
+        """Latency of the chain currently running on the callback thread."""
+        return self._chain.latency_frames * 1000.0 / self._config.samplerate
+
+    @property
+    def chain_cost_ms(self) -> float:
+        """Declared processing cost of the enabled blocks in the active chain.
+
+        Cost telemetry is optional because the pedalboard blocks are effectively
+        free at this cadence; the neural block reports its measured p99 instead.
+        Reading it here keeps timing and allocation out of the callback itself.
+        """
+        return sum(
+            float(getattr(slot.effect, "cost_ms", 0.0))
+            for slot in self._chain.slots
+            if slot.enabled
+        )
+
     def _on_input(self, block: np.ndarray) -> None:
         self._ring.write(block)
 
