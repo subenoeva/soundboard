@@ -16,9 +16,12 @@ is named here; collect_all covers the rest of both packages.
 The neural block's weights are fetched and hash-checked before Analysis runs rather
 than committed, so the file bundled below is always the pinned revision — see
 packaging/fetch_model.py. It ships inside the bundle because first launch has to work
-offline, and THIRD-PARTY-NOTICES plus the full Apache-2.0 text ship beside it: this
-build redistributes PySide6, pedalboard, onnxruntime and CEVA's model, and Apache-2.0
-§4 wants the licence carried, not cited.
+offline, and THIRD-PARTY-NOTICES plus the GPL-3.0, LGPL-3.0 and Apache-2.0 texts ship
+beside it: this build redistributes PySide6, pedalboard, onnxruntime and CEVA's model,
+and those licences want their text carried, not cited. Qt arrives here as separate
+shared libraries the user can replace in _internal/, which is LGPL-3 §4(d)(1); the
+notices file argues §4(d)(0) as well, because the Windows onefile build has no other
+route and one notices file serves both.
 """
 
 import os

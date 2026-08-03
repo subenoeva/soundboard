@@ -116,8 +116,12 @@ Layered, with the real-time audio core kept isolated from anything that does I/O
   not committed but the binary still ships it and works offline (`dpdfnet`'s own
   downloader checks nothing and defaults to the mutable `main` ref, which is why it is
   not used). `third_party_notices.py` generates `THIRD-PARTY-NOTICES` from the metadata
-  of what is installed and ships it with the full Apache-2.0 text, which Apache-2.0 §4
-  requires the distribution to carry for CEVA's model and the loop vendored from it.
+  of what is installed and ships it with the GPL-3.0, LGPL-3.0 and Apache-2.0 texts, the
+  last two being what Apache-2.0 §4 and LGPL-3 §4(b) require the distribution to carry
+  for CEVA's model and for Qt. Its header is also where the Windows `--onefile` build
+  answers LGPL-3 §4 for Qt: the DLLs cannot be swapped inside a single executable, so
+  the binary relies on §4(d)(0) — the whole program is GPL-3.0-or-later and its source
+  and build are public, which is what makes relinking a modified Qt possible.
   Run either by hand from a checkout: `uv run python packaging/fetch_model.py`.
 - **`hotkeys.py`** (top-level, not under `ui/`) — global keyboard shortcuts behind a
   `HotkeyManager` protocol: `PynputHotkeyManager` (real) / `FakeHotkeyManager` (tests, no OS

@@ -16,10 +16,17 @@ named here; collect_all covers the rest of both packages.
 The neural block's weights are fetched and hash-checked before Analysis runs rather
 than committed, so the file bundled below is always the pinned revision — see
 packaging/fetch_model.py. It ships inside the binary because first launch has to work
-offline, and THIRD-PARTY-NOTICES plus the full Apache-2.0 text ship with it: this
-build redistributes PySide6, pedalboard, onnxruntime and CEVA's model, and Apache-2.0
-§4 wants the licence carried, not cited. With --onefile they live in the archive,
-which is the only "beside the binary" a single executable has.
+offline, and THIRD-PARTY-NOTICES plus the GPL-3.0, LGPL-3.0 and Apache-2.0 texts ship
+with it: this build redistributes PySide6, pedalboard, onnxruntime and CEVA's model,
+and those licences want their text carried, not cited. With --onefile they live in the
+archive, which is the only "beside the binary" a single executable has.
+
+--onefile is also what makes LGPL-3 §4(d)(1) unavailable for Qt here, since the DLLs
+are inside the executable and cannot be swapped for a user's own build. The route this
+binary takes instead is §4(d)(0), which the notices file states and which holds because
+the whole program is GPL-3.0-or-later with public source — see the header written by
+packaging/third_party_notices.py. Nothing about that argument depends on --onefile
+staying, so the flag remains a packaging decision rather than a licensing one.
 """
 
 import os

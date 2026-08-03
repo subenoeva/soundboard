@@ -23,6 +23,11 @@ def _load_notices() -> ModuleType:
 notices = _load_notices()
 APACHE_NAME = notices.APACHE_NAME
 APACHE_SOURCE = notices.APACHE_SOURCE
+GPL_NAME = notices.GPL_NAME
+GPL_SOURCE = notices.GPL_SOURCE
+LGPL_NAME = notices.LGPL_NAME
+LGPL_SOURCE = notices.LGPL_SOURCE
+LICENCE_FILES = notices.LICENCE_FILES
 NOTICES_NAME = notices.NOTICES_NAME
 Notice = notices.Notice
 collect = notices.collect
@@ -104,20 +109,61 @@ def test_the_repository_carries_the_full_apache_licence_text() -> None:
     assert len(text) > 10_000
 
 
-def test_writing_the_notices_produces_both_files_for_the_bundle_root(tmp_path: Path) -> None:
+def test_the_repository_carries_the_full_lgpl_text() -> None:
+    """The Windows build links Qt inside a single executable, so LGPL-3 §4(b) — the
+    licence itself, in full — is met by shipping this text, taken from gnu.org."""
+    text = LGPL_SOURCE.read_text(encoding="utf-8")
+
+    assert "GNU LESSER GENERAL PUBLIC LICENSE" in text
+    assert "Version 3, 29 June 2007" in text
+    assert "4. Combined Works." in text
+    assert "5. Combined Libraries." in text
+    assert len(text) > 5_000
+
+
+def test_the_notices_open_with_the_source_offer_that_the_relinking_right_rests_on() -> None:
+    """§4(d)(0) is the route a onefile build has to take: the user cannot swap a DLL
+    that is inside the executable, so the corresponding source has to be reachable and
+    the rebuild that relinks a modified Qt has to be written down."""
+    text = render(collect())
+
+    assert "https://github.com/subenoeva/soundboard" in text
+    assert "LGPL-3.0-only" in text
+    assert "pyinstaller packaging/windows/soundboard.spec" in text
+    assert GPL_NAME in text
+    assert LGPL_NAME in text
+
+
+def test_writing_the_notices_produces_every_licence_file_for_the_bundle_root(
+    tmp_path: Path,
+) -> None:
     datas = write_notices(tmp_path / "notices")
 
     destinations = {Path(source).name: destination for source, destination in datas}
-    assert destinations == {NOTICES_NAME: ".", APACHE_NAME: "."}
+    assert destinations == {
+        NOTICES_NAME: ".",
+        APACHE_NAME: ".",
+        GPL_NAME: ".",
+        LGPL_NAME: ".",
+    }
     for source, _ in datas:
         assert Path(source).is_file()
 
 
-def test_the_written_licence_is_the_full_text_byte_for_byte(tmp_path: Path) -> None:
+def test_the_written_licences_are_the_full_texts_byte_for_byte(tmp_path: Path) -> None:
     write_notices(tmp_path / "notices")
 
-    written = (tmp_path / "notices" / APACHE_NAME).read_bytes()
-    assert written == APACHE_SOURCE.read_bytes()
+    for source, name in LICENCE_FILES:
+        assert (tmp_path / "notices" / name).read_bytes() == source.read_bytes()
+
+
+def test_the_shipped_gpl_text_is_the_one_the_project_itself_is_under(tmp_path: Path) -> None:
+    """Not a second copy that can drift: the file the bundle carries is the repository's
+    own LICENSE, which is what GPL-3 §4 requires the binary to be accompanied by."""
+    write_notices(tmp_path / "notices")
+
+    assert Path("LICENSE").resolve() == GPL_SOURCE
+    assert (tmp_path / "notices" / GPL_NAME).read_bytes() == Path("LICENSE").read_bytes()
 
 
 def test_the_written_notices_list_the_installed_dependencies(tmp_path: Path) -> None:
@@ -132,7 +178,10 @@ def test_the_written_notices_list_the_installed_dependencies(tmp_path: Path) -> 
 def test_a_missing_licence_text_fails_the_build_rather_than_shipping_without_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(notices, "APACHE_SOURCE", tmp_path / "gone.txt")
+    monkeypatch.setattr(
+        notices, "LICENCE_FILES", ((tmp_path / "gone.txt", "LICENSE-Gone.txt"),)
+    )
 
     with pytest.raises(FileNotFoundError):
         write_notices(tmp_path / "notices")
+    assert not (tmp_path / "notices").exists(), "a licence that is missing leaves no output"
