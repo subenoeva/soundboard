@@ -56,7 +56,16 @@ Layered, with the real-time audio core kept isolated from anything that does I/O
   deque `play`/`stop_all` use and hands the outgoing one back through `drain_retired()`:
   releasing a plugin or an ONNX session on the callback thread is not allowed. Persistence
   is `ui/effects_store.py`, beside `ui_layout.json`; an entry that will not build is kept
-  as a row carrying its error, never dropped.
+  as a row carrying its error, never dropped. `vst_editor.py` is the plugin's own window:
+  `show_editor()` blocks the thread it is called on and pedalboard only allows the main
+  one, so it runs in a second process (`soundboard vst-editor <path>`, driven by
+  `ui/vst_editor_process.py` over a QProcess) holding a second instance of the plugin.
+  Parameters travel one way, as JSON lines on stdout, and land in the chain through the
+  same funnel a slider uses; the parent closing stdin is what asks the window to go, and
+  is the only cue that reaches a process sitting inside a plugin's message loop.
+  `plugin.parameters` rebuilds its whole dictionary on every access (3.7 ms for a
+  67-parameter plugin), so it is read once per poll rather than once per parameter, and
+  `raw_state` — 0.01 ms — decides whether there is anything worth reading at all.
 - **`remote/`** — the Supabase-backed shared sound library. `RemoteClient` is the seam
   between library logic and the backend (`SupabaseRemoteClient` real,
   `FakeRemoteClient` in-memory for tests — the same role `AudioBackend` plays for audio).
@@ -126,7 +135,9 @@ Layered, with the real-time audio core kept isolated from anything that does I/O
 - **`hotkeys.py`** (top-level, not under `ui/`) — global keyboard shortcuts behind a
   `HotkeyManager` protocol: `PynputHotkeyManager` (real) / `FakeHotkeyManager` (tests, no OS
   hook). Only module that imports `pynput`.
-- **`cli.py`** — subcommands (`devices`, `run`, `auth`, `sounds`, `categories`, `gui`).
+- **`cli.py`** — subcommands (`devices`, `run`, `auth`, `sounds`, `categories`, `gui`, plus
+  the hidden `vst-editor`, which is how the GUI reaches a plugin window: a frozen build
+  has no interpreter beside it, so it runs itself again).
   Imports `soundboard.ui.app` lazily, only inside the `gui` branch, so headless CLI usage
   never pulls in PySide6.
 

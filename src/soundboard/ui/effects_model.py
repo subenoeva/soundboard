@@ -25,6 +25,7 @@ from soundboard.effects.params import ParamValue
 from soundboard.effects.realtime_gc import enable as enable_realtime_gc
 from soundboard.effects.registry import catalog, create
 from soundboard.ui.effect_worker import EffectLoadWorker, load_effect_entry
+from soundboard.ui.effects_editor import RackEditors
 from soundboard.ui.effects_presenter import adopted, parameter_rows, row_label, summary
 from soundboard.ui.effects_store import EffectEntry, LoadedEffect, save_effects
 
@@ -44,6 +45,7 @@ class EffectsModel(QAbstractListModel):
     LATENCY_MS_ROLE = KIND_ROLE + 4
     ERROR_ROLE = KIND_ROLE + 5
     LOADING_ROLE = KIND_ROLE + 6
+    EDITOR_ROLE = KIND_ROLE + 7
 
     toast = Signal(str)
 
@@ -56,9 +58,11 @@ class EffectsModel(QAbstractListModel):
         samplerate: int = 48_000,
         blocksize: int = 256,
         load_effect: Callable[[EffectEntry, int], Effect] | None = None,
+        editor_command: tuple[str, list[str]] | None = None,
     ) -> None:
         super().__init__(parent)
         self._engine = engine
+        self._editors = RackEditors(self, editor_command)
         self._rows = [adopted(row) for row in rows]
         self._path = path
         self._samplerate = samplerate
@@ -113,6 +117,9 @@ class EffectsModel(QAbstractListModel):
     def remove(self, index: int) -> None:
         if not 0 <= index < len(self._rows):
             return
+        # The window belongs to the block: deleting the block behind it would leave
+        # a plugin instance running with nothing left to send its knobs to.
+        self._editors.close(self._rows[index].effect)
         self.beginRemoveRows(QModelIndex(), index, index)
         del self._rows[index]
         self.endRemoveRows()
@@ -144,28 +151,58 @@ class EffectsModel(QAbstractListModel):
 
     @Slot(int, str, "QVariant")
     def set_param(self, index: int, name: str, value: ParamValue) -> None:
-        """Move one knob on the block at ``index``, and remember where it now sits.
+        """Move one knob on the block at ``index``, and remember where it now sits."""
+        if not 0 <= index < len(self._rows):
+            return
+        if self.apply_param(index, name, value):
+            # No new chain: the blocks and their order are what they were, and
+            # rebuilding one per slider frame would retire a chain per frame with it.
+            self.save()
+
+    @Slot(int)
+    def open_editor(self, index: int) -> None:
+        """Open the plugin's own window for the block at ``index``.
+
+        It runs in a process of its own — see ui/vst_editor_process.py — because a
+        plugin window blocks the thread that shows it for as long as it is up.
+        """
+        if not 0 <= index < len(self._rows):
+            return
+        row = self._rows[index]
+        if row.effect is None or not row.entry.plugin_path:
+            return
+        self._editors.open(row.effect, row.entry.plugin_path, row.entry.params)
+        self._emit_row_changed(index, [self.EDITOR_ROLE])
+
+    def row_of(self, effect: Effect) -> int:
+        """Where a block sits now, for work that outlived the row it started on."""
+        return next((i for i, row in enumerate(self._rows) if row.effect is effect), -1)
+
+    def refresh(self, index: int, roles: list[int]) -> None:
+        self._emit_row_changed(index, roles)
+
+    def save(self) -> None:
+        save_effects(self._path, [row.entry for row in self._rows])
+
+    def apply_param(self, index: int, name: str, value: ParamValue) -> bool:
+        """Move one knob: clamp it, hand it to the chain, remember where it sits.
 
         The value is clamped here as well as in the block because this is the copy
         that gets saved: handing the plugin 900 dB and writing 900 dB down would
         give a file that no longer describes what the user is hearing.
         """
-        if not 0 <= index < len(self._rows):
-            return
         row = self._rows[index]
         if row.effect is None:
-            return
+            return False
         spec = next((s for s in row.effect.param_specs() if s.name == name), None)
         if spec is None:
-            return
+            return False
         value = spec.coerce(value)
         params = {**row.entry.params, name: value}
         self._rows[index] = replace(row, entry=replace(row.entry, params=params))
         self._engine.set_param(row.effect, name, value)
         self._emit_row_changed(index, [self.SUMMARY_ROLE])
-        # No new chain: the blocks and their order are what they were, and
-        # rebuilding one per slider frame would retire a chain per frame with it.
-        save_effects(self._path, [row.entry for row in self._rows])
+        return True
 
     @Slot(int, result="QVariantList")
     def param_specs(self, index: int) -> list[dict[str, Any]]:
@@ -185,6 +222,7 @@ class EffectsModel(QAbstractListModel):
     def detach(self) -> None:
         """Ignore results belonging to a model retired during a device change."""
         self._live = False
+        self._editors.close_all()
 
     def _start_loading(self, row: LoadedEffect) -> None:
         worker = EffectLoadWorker(lambda: self._load_effect(row.entry, self._blocksize))
@@ -277,6 +315,8 @@ class EffectsModel(QAbstractListModel):
             return row.error or ""
         if role == self.LOADING_ROLE:
             return row.loading
+        if role == self.EDITOR_ROLE:
+            return row.effect is not None and row.effect in self._editors
         return None
 
     def roleNames(self) -> dict[int, bytes]:  # type: ignore[override]
@@ -288,4 +328,5 @@ class EffectsModel(QAbstractListModel):
             self.LATENCY_MS_ROLE: b"latencyMs",
             self.ERROR_ROLE: b"errorText",
             self.LOADING_ROLE: b"loading",
+            self.EDITOR_ROLE: b"editorOpen",
         }

@@ -146,15 +146,18 @@ Item {
                             width: parent.width
                             height: parent.height
                             rackIndex: index
+                            kind: model.kind
                             effectLabel: model.label
                             summary: model.summary
                             effectEnabled: model.enabled
                             latencyMs: model.latencyMs
                             errorText: model.errorText
                             loading: model.loading
+                            editorOpen: model.editorOpen
                             selected: root.selectedIndex === index
                             onSelectedRequested: root.selectEffect(index, model.label)
                             onToggleRequested: (on) => App.effectsModel.set_enabled(index, on)
+                            onEditorRequested: App.effectsModel.open_editor(index)
                             onRemoveRequested: {
                                 App.effectsModel.remove(index)
                                 root.selectedIndex = -1

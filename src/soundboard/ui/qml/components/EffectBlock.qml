@@ -7,16 +7,19 @@ Rectangle {
     id: root
     objectName: "effectBlock"
     property int rackIndex: -1
+    property string kind: ""
     property string effectLabel: ""
     property string summary: ""
     property bool effectEnabled: true
     property real latencyMs: 0.0
     property string errorText: ""
     property bool loading: false
+    property bool editorOpen: false
     property bool selected: false
     signal selectedRequested()
     signal toggleRequested(bool on)
     signal removeRequested()
+    signal editorRequested()
 
     implicitWidth: 166
     implicitHeight: 142
@@ -102,6 +105,26 @@ Rectangle {
                         root.y = 0
                     }
                 }
+            }
+            Button {
+                id: editorButton
+                objectName: "effectEditorButton"
+                // Only a VST3 brings a window of its own; the built-in blocks are
+                // drawn from their descriptors and have nothing else to show.
+                visible: root.kind === "vst3"
+                enabled: !root.loading && root.errorText === "" && !root.editorOpen
+                Layout.preferredWidth: 36
+                text: "🎛"
+                leftPadding: 4
+                rightPadding: 4
+                implicitHeight: 26
+                hoverEnabled: true
+                Accessible.name: "Abrir la ventana del plugin"
+                ToolTip.visible: hovered
+                ToolTip.text: root.editorOpen
+                              ? "La ventana del plugin ya está abierta"
+                              : "Abrir la ventana del plugin"
+                onClicked: root.editorRequested()
             }
             Button {
                 Layout.fillWidth: true

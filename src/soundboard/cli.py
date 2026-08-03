@@ -85,6 +85,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("gui", help="launch the PySide6 desktop window")
 
+    # Not for people to type: this is how the GUI opens a plugin's own window, by
+    # running this program again. See soundboard/effects/vst_editor.py.
+    editor = subparsers.add_parser("vst-editor", help=argparse.SUPPRESS)
+    editor.add_argument("path")
+
     return parser
 
 
@@ -309,4 +314,8 @@ def main(argv: list[str] | None = None) -> int:
         from soundboard.ui.app import run_gui
 
         return run_gui()
+    if args.command == "vst-editor":
+        from soundboard.effects import vst_editor
+
+        return vst_editor.main([args.path])
     raise AssertionError(f"unhandled command {args.command!r}")  # argparse guarantees a match

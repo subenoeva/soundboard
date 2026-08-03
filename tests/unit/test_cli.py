@@ -304,6 +304,30 @@ def test_gui_subcommand_is_available() -> None:
     assert args.command == "gui"
 
 
+def test_vst_editor_subcommand_takes_the_plugin_to_open() -> None:
+    args = build_parser().parse_args(["vst-editor", "C:/plugins/Voice.vst3"])
+
+    assert args.command == "vst-editor"
+    assert args.path == "C:/plugins/Voice.vst3"
+
+
+def test_vst_editor_subcommand_runs_the_editor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The GUI reaches the plugin window by running this program again, so the
+    subcommand is the whole interface between the two processes."""
+    import soundboard.effects.vst_editor as editor
+
+    opened: list[list[str]] = []
+
+    def fake_main(argv: list[str]) -> int:
+        opened.append(argv)
+        return 0
+
+    monkeypatch.setattr(editor, "main", fake_main)
+
+    assert main(["vst-editor", "Voice.vst3"]) == 0
+    assert opened == [["Voice.vst3"]]
+
+
 def test_importing_cli_does_not_import_pyside6() -> None:
     # A fresh subprocess, not a plain `sys.modules` check in-process: other test
     # modules in the same pytest run already import PySide6 for their own widget

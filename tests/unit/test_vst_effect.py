@@ -186,6 +186,35 @@ def test_reported_latency_does_not_delay_a_full_plugin_output_twice(
     )
 
 
+def test_reading_the_parameters_asks_the_plugin_for_its_list_once(tmp_path: Path) -> None:
+    """``parameters`` is a property that rebuilds its dictionary on every access —
+    3.7 ms for Graillon's 67 of them. Reading it per parameter instead of once made
+    a full read 258 ms, which is what the plugin editor polls."""
+    plugin = _CountingPlugin()
+    effect, _ = _load(tmp_path, plugin)
+    plugin.parameter_reads = 0
+
+    values = effect.params()
+
+    assert values == {"drive": 2.5, "bypass": False, "mode": "Clean"}
+    assert plugin.parameter_reads == 1
+
+
+class _CountingPlugin(FakePlugin):
+    """A plugin that counts how often its parameter list is asked for."""
+
+    parameter_reads = 0
+
+    @property
+    def parameters(self) -> dict[str, FakeParameter]:
+        self.parameter_reads += 1
+        return self._parameters
+
+    @parameters.setter
+    def parameters(self, value: dict[str, FakeParameter]) -> None:
+        self._parameters = value
+
+
 def test_an_instrument_cannot_enter_the_microphone_effect_chain(tmp_path: Path) -> None:
     plugin = FakePlugin()
     plugin.is_effect = False

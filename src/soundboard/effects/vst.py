@@ -58,6 +58,32 @@ class _OutputFifo:
         self._length -= count
 
 
+def read_param(plugin: Any, name: str) -> ParamValue:
+    """One parameter, typed the way the plugin's own descriptor declares it."""
+    return _typed(getattr(plugin, name), plugin.parameters[name].type)
+
+
+def plugin_params(plugin: Any) -> dict[str, ParamValue]:
+    """Every parameter the plugin reports. Also what the editor process polls.
+
+    ``plugin.parameters`` is a property that rebuilds its whole dictionary on each
+    access — 3.7 ms for Graillon's 67 parameters — so it is read once here rather
+    than once per name. Measured on that plugin: 258 ms a read became 4.5 ms.
+    """
+    parameters = plugin.parameters
+    return {
+        name: _typed(getattr(plugin, name), parameters[name].type) for name in parameters
+    }
+
+
+def _typed(value: Any, parameter_type: type) -> ParamValue:
+    if parameter_type is bool:
+        return bool(value)
+    if parameter_type is str:
+        return str(value)
+    return float(value)
+
+
 def _descriptor(name: str, parameter: Any, value: ParamValue) -> ParamSpec:
     label = str(getattr(parameter, "name", name)).strip() or name.replace("_", " ").title()
     unit = str(getattr(parameter, "label", "") or "")
@@ -101,9 +127,11 @@ class VstEffect:
         self._samplerate = samplerate
         self._blocksize = blocksize
         self._latency = max(0, int(getattr(plugin, "reported_latency_samples", 0)))
+        parameters = plugin.parameters
+        values = plugin_params(plugin)
         self._specs = {
-            name: _descriptor(name, parameter, self._read(name))
-            for name, parameter in plugin.parameters.items()
+            name: _descriptor(name, parameter, values[name])
+            for name, parameter in parameters.items()
         }
         self._fifo = _OutputFifo(blocksize * 2, 0)
         self._learned_buffering = False
@@ -128,13 +156,7 @@ class VstEffect:
         self._fifo.reset()
 
     def _read(self, name: str) -> ParamValue:
-        value = getattr(self._plugin, name)
-        parameter_type = self._plugin.parameters[name].type
-        if parameter_type is bool:
-            return bool(value)
-        if parameter_type is str:
-            return str(value)
-        return float(value)
+        return read_param(self._plugin, name)
 
     def set_param(self, name: str, value: ParamValue) -> None:
         spec = self._specs.get(name)
@@ -143,7 +165,11 @@ class VstEffect:
         setattr(self._plugin, name, spec.coerce(value))
 
     def params(self) -> dict[str, ParamValue]:
-        return {name: self._read(name) for name in self._specs}
+        # Restricted to the parameters this block was built with: a name the
+        # descriptors do not know is one set_param() would refuse on the way back
+        # in, and saving it would give a file that cannot be reloaded.
+        live = plugin_params(self._plugin)
+        return {name: live[name] for name in self._specs if name in live}
 
     def param_specs(self) -> tuple[ParamSpec, ...]:
         return tuple(self._specs.values())

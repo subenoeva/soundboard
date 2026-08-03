@@ -203,6 +203,42 @@ def test_effect_block_drag_handle_does_not_cover_the_bypass_switch(qapp: object)
     assert handle_right <= bypass_left
 
 
+def test_effect_block_offers_the_plugin_window_only_for_a_vst(qapp: object) -> None:
+    """A built-in block has no window of its own to open, and pedalboard has no
+    editor to show for one."""
+    _component, block = _instantiate("EffectBlock.qml")
+    block.setProperty("width", 166)
+    button = block.findChild(QObject, "effectEditorButton")
+
+    assert isinstance(button, QQuickItem)
+    assert button.property("visible") is False
+
+    block.setProperty("kind", "vst3")
+    QCoreApplication.processEvents()
+
+    assert button.property("visible") is True
+    assert button.property("enabled") is True
+
+
+def test_effect_block_does_not_offer_a_window_it_cannot_open(qapp: object) -> None:
+    """While the block is still loading there is no plugin behind it, and once a
+    window is up a second one for the same block is refused anyway."""
+    _component, block = _instantiate("EffectBlock.qml")
+    block.setProperty("width", 166)
+    block.setProperty("kind", "vst3")
+    button = block.findChild(QObject, "effectEditorButton")
+    assert isinstance(button, QQuickItem)
+
+    block.setProperty("loading", True)
+    QCoreApplication.processEvents()
+    assert button.property("enabled") is False
+
+    block.setProperty("loading", False)
+    block.setProperty("editorOpen", True)
+    QCoreApplication.processEvents()
+    assert button.property("enabled") is False
+
+
 def test_parameter_panel_draws_boolean_and_choice_vst_parameters(qapp: object) -> None:
     _component, panel = _instantiate("ParamPanel.qml")
     panel.setProperty("width", 600)

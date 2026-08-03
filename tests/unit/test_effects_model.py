@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 from pathlib import Path
 from typing import Any
@@ -468,6 +469,113 @@ def test_the_parameter_panel_receives_vst_parameter_types(qtbot: Any, tmp_path: 
             "choices": ["Clean", "Warm", "Bright"],
         },
     ]
+
+
+def _editor_model(
+    tmp_path: Path, script: str, effect: Any | None = None
+) -> tuple[EffectsModel, FakeEngine, Any]:
+    """A rack holding one built VST3 whose editor process is a stub, not a plugin."""
+    engine = FakeEngine()
+    effect = effect or _TypedVstEffect()
+    entry = EffectEntry(kind="vst3", plugin_path=str(tmp_path / "Voice.vst3"))
+    model = EffectsModel(
+        engine,
+        [LoadedEffect(entry, effect=effect)],
+        tmp_path / "effects.json",
+        editor_command=(sys.executable, ["-c", script]),
+    )
+    return model, engine, effect
+
+
+def test_a_knob_moved_in_the_plugin_window_reaches_the_chain(
+    qtbot: Any, tmp_path: Path
+) -> None:
+    """The window drives a second instance of the plugin, so the only thing that
+    makes it audible is this: its values coming back through the same funnel a
+    slider uses, clamped and saved on the way."""
+    script = (
+        "import json, sys; sys.stdin.readline(); "
+        "print(json.dumps({'params': {'mode': 'Warm'}}))"
+    )
+    model, engine, effect = _editor_model(tmp_path, script)
+
+    model.open_editor(0)
+    qtbot.waitUntil(lambda: not model.data(model.index(0), EffectsModel.EDITOR_ROLE))
+
+    assert [call[1:] for call in engine.param_calls] == [("mode", "Warm")]
+    assert effect.params()["mode"] == "Warm"
+    assert load_effects(tmp_path / "effects.json")[0].params["mode"] == "Warm"
+
+
+def test_the_rack_shows_that_a_plugin_window_is_open(qtbot: Any, tmp_path: Path) -> None:
+    """Two authorities over one plugin is the bug this prevents: while the window is
+    up, it owns the knobs and the panel here stops offering its own."""
+    model, _, _ = _editor_model(
+        tmp_path, "import sys; sys.stdin.readline(); sys.stdin.read()"
+    )
+
+    model.open_editor(0)
+
+    assert model.data(model.index(0), EffectsModel.EDITOR_ROLE) is True
+    model.detach()
+    qtbot.waitUntil(lambda: not model.data(model.index(0), EffectsModel.EDITOR_ROLE))
+
+
+def test_a_second_window_for_the_same_block_is_not_opened(qtbot: Any, tmp_path: Path) -> None:
+    model, _, _ = _editor_model(
+        tmp_path, "import sys; sys.stdin.readline(); sys.stdin.read()"
+    )
+
+    model.open_editor(0)
+    model.open_editor(0)
+
+    assert model.data(model.index(0), EffectsModel.EDITOR_ROLE) is True
+    model.detach()
+
+
+def test_a_block_with_no_plugin_behind_it_has_no_window_to_open(
+    qtbot: Any, tmp_path: Path
+) -> None:
+    model, _ = _model(tmp_path, [EffectEntry(kind="gain")])
+
+    model.open_editor(0)
+
+    assert model.data(model.index(0), EffectsModel.EDITOR_ROLE) is False
+
+
+def test_an_editor_that_dies_says_so_instead_of_leaving_the_block_stuck(
+    qtbot: Any, tmp_path: Path
+) -> None:
+    script = "import sys; sys.stdin.readline(); sys.stderr.write('boom\\n'); sys.exit(2)"
+    model, _, _ = _editor_model(tmp_path, script)
+    toasts: list[str] = []
+    model.toast.connect(toasts.append)
+
+    model.open_editor(0)
+    qtbot.waitUntil(lambda: bool(toasts))
+
+    assert "boom" in toasts[0]
+    assert model.data(model.index(0), EffectsModel.EDITOR_ROLE) is False
+
+
+def test_a_window_reporting_a_parameter_the_block_rejects_does_not_take_it_down(
+    qtbot: Any, tmp_path: Path
+) -> None:
+    """Same plugin on both sides, so this should not happen — and if it does, one
+    toast is a better answer than a traceback out of a signal handler."""
+    script = (
+        "import json, sys; sys.stdin.readline(); "
+        "print(json.dumps({'params': {'mode': 'Nonsense', 'bypass': True}}))"
+    )
+    model, _, effect = _editor_model(tmp_path, script)
+    toasts: list[str] = []
+    model.toast.connect(toasts.append)
+
+    model.open_editor(0)
+    qtbot.waitUntil(lambda: not model.data(model.index(0), EffectsModel.EDITOR_ROLE))
+
+    assert effect.params()["bypass"] is True, "the parameters around it still land"
+    assert any("mode" in toast for toast in toasts)
 
 
 class _DelayedEffect:
