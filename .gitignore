@@ -18,9 +18,18 @@ htmlcov/
 *.spec.bak
 *.AppImage
 src/soundboard/_baked_defaults.py
+# Fetched and hash-verified at build time by packaging/fetch_model.py, which is what
+# makes committing 10MB of weights unnecessary. Named by extension so anything else
+# that belongs in models/ stays visible.
+src/soundboard/effects/models/*.onnx
+src/soundboard/effects/models/*.onnx.part
 
 # Local audio scratch
 scratch/
 *.f32
+
+# Designs and plans stay out of the checkout (see AGENTS.md); keeping them here
+# rather than elsewhere on disk is only so they sit next to the code they describe.
+docs/
 
 .idea/

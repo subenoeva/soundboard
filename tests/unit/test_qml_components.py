@@ -5,8 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QCoreApplication, QObject, QPointF
 from PySide6.QtQml import QQmlComponent, QQmlEngine
+from PySide6.QtQuick import QQuickItem
 
 QML_DIR = Path(__file__).parents[2] / "src" / "soundboard" / "ui" / "qml"
 
@@ -29,17 +30,27 @@ def _instantiate(name: str) -> tuple[QQmlComponent, QObject]:
     return component, obj
 
 
+def _find_visual_child(root: QQuickItem, name: str) -> QQuickItem | None:
+    for child in root.childItems():
+        if child.objectName() == name:
+            return child
+        if found := _find_visual_child(child, name):
+            return found
+    return None
+
+
 def test_components_exist() -> None:
     names = {p.name for p in COMPONENTS}
     assert {"ClipPad.qml", "HeaderBar.qml", "VUMeter.qml", "Toast.qml",
             "LibraryPopup.qml", "ShortcutPopup.qml", "ColorPopup.qml",
-            "UpdateBanner.qml"} <= names
+            "UpdateBanner.qml", "EffectBlock.qml", "EffectPalette.qml",
+            "ParamPanel.qml", "ParamSlider.qml"} <= names
 
 
 def test_views_exist() -> None:
     names = {p.name for p in QML_DIR.glob("*.qml")}
     assert {"Main.qml", "LoginView.qml", "DeviceSetupView.qml",
-            "BoardView.qml", "Theme.qml"} <= names
+            "BoardView.qml", "GridPage.qml", "EffectsPage.qml", "Theme.qml"} <= names
 
 
 @pytest.mark.parametrize("qml_file", COMPONENTS, ids=lambda p: p.name)
@@ -154,3 +165,99 @@ def test_clip_pad_wraps_the_shortcut_in_a_badge(qapp: object) -> None:
     # Capped to the pad's inner width, which is what makes the label elide rather
     # than spill out of the pad.
     assert badge.property("width") <= 120 - 16
+
+
+def test_effect_block_offers_a_visible_reorder_button(qapp: object) -> None:
+    _component, block = _instantiate("EffectBlock.qml")
+    block.setProperty("width", 166)
+    drag_handle = block.findChild(QObject, "effectDragHandle")
+    reorder_button = block.findChild(QObject, "effectReorderButton")
+
+    assert isinstance(block, QQuickItem)
+    assert isinstance(drag_handle, QQuickItem)
+    assert isinstance(reorder_button, QQuickItem)
+    assert reorder_button.property("visible") is True
+    assert reorder_button.property("text") == "✥"
+    assert reorder_button.property("implicitContentWidth") <= reorder_button.property(
+        "availableWidth"
+    )
+    handle_origin = drag_handle.mapToItem(reorder_button, QPointF())
+    assert handle_origin == QPointF(0, 0)
+    assert drag_handle.width() == reorder_button.width()
+    assert drag_handle.height() == reorder_button.height()
+
+
+def test_effect_block_drag_handle_does_not_cover_the_bypass_switch(qapp: object) -> None:
+    _component, block = _instantiate("EffectBlock.qml")
+    block.setProperty("width", 166)
+    drag_handle = block.findChild(QObject, "effectDragHandle")
+    bypass = block.findChild(QObject, "effectBypass")
+
+    assert isinstance(block, QQuickItem)
+    assert isinstance(drag_handle, QQuickItem)
+    assert isinstance(bypass, QQuickItem)
+    bypass_left = bypass.mapToItem(block, QPointF()).x()
+    handle_right = drag_handle.mapToItem(
+        block, QPointF(drag_handle.width(), 0)
+    ).x()
+    assert handle_right <= bypass_left
+
+
+def test_effect_block_offers_the_plugin_window_only_for_a_vst(qapp: object) -> None:
+    """A built-in block has no window of its own to open, and pedalboard has no
+    editor to show for one."""
+    _component, block = _instantiate("EffectBlock.qml")
+    block.setProperty("width", 166)
+    button = block.findChild(QObject, "effectEditorButton")
+
+    assert isinstance(button, QQuickItem)
+    assert button.property("visible") is False
+
+    block.setProperty("kind", "vst3")
+    QCoreApplication.processEvents()
+
+    assert button.property("visible") is True
+    assert button.property("enabled") is True
+
+
+def test_effect_block_does_not_offer_a_window_it_cannot_open(qapp: object) -> None:
+    """While the block is still loading there is no plugin behind it, and once a
+    window is up a second one for the same block is refused anyway."""
+    _component, block = _instantiate("EffectBlock.qml")
+    block.setProperty("width", 166)
+    block.setProperty("kind", "vst3")
+    button = block.findChild(QObject, "effectEditorButton")
+    assert isinstance(button, QQuickItem)
+
+    block.setProperty("loading", True)
+    QCoreApplication.processEvents()
+    assert button.property("enabled") is False
+
+    block.setProperty("loading", False)
+    block.setProperty("editorOpen", True)
+    QCoreApplication.processEvents()
+    assert button.property("enabled") is False
+
+
+def test_parameter_panel_draws_boolean_and_choice_vst_parameters(qapp: object) -> None:
+    _component, panel = _instantiate("ParamPanel.qml")
+    panel.setProperty("width", 600)
+    panel.setProperty("height", 88)
+    panel.setProperty(
+        "parameters",
+        [
+            {"name": "bypass", "label": "Bypass", "type": "bool", "value": False},
+            {
+                "name": "mode",
+                "label": "Mode",
+                "type": "choice",
+                "value": "Clean",
+                "choices": ["Clean", "Warm"],
+            },
+        ],
+    )
+    QCoreApplication.processEvents()
+
+    assert isinstance(panel, QQuickItem)
+    assert _find_visual_child(panel, "boolParamControl") is not None
+    assert _find_visual_child(panel, "choiceParamControl") is not None

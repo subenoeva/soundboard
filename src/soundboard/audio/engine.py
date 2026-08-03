@@ -13,6 +13,8 @@ from soundboard.audio.drift import DriftController, DriftResampler
 from soundboard.audio.mixer import Mixer
 from soundboard.audio.ringbuffer import RingBuffer
 from soundboard.audio.voice import Voice
+from soundboard.effects.chain import Effect, EffectChain, ParamChange
+from soundboard.effects.params import ParamValue
 
 
 @dataclass(frozen=True)
@@ -55,7 +57,11 @@ class AudioEngine:
         self._mixer = Mixer(blocksize=block, samplerate=self._config.samplerate)
         self._mic_block = np.zeros(block, dtype=np.float32)
         self._mix_block = np.zeros(block, dtype=np.float32)
-        self._commands: deque[tuple[str, Voice | None]] = deque()
+        self._chain = EffectChain()
+        self._commands: deque[tuple[str, Voice | EffectChain | ParamChange | None]] = deque()
+        self._retired: deque[EffectChain] = deque()
+        self._input_peak = 0.0
+        self._chain_peak = 0.0
         self._ratio = 1.0
         self._input_stream: Stream | None = None
         self._output_stream: Stream | None = None
@@ -143,6 +149,31 @@ class AudioEngine:
         """Stop every playing clip. Safe to call from any thread."""
         self._commands.append(("stop_all", None))
 
+    def set_chain(self, chain: EffectChain) -> None:
+        """Install ``chain`` on the callback thread. Safe to call from any thread.
+
+        The caller builds the replacement whole and hands it over; the callback
+        only rebinds a reference, so it never sees a half-built chain.
+        """
+        self._commands.append(("chain", chain))
+
+    def set_param(self, effect: Effect, name: str, value: ParamValue) -> None:
+        """Move one knob on a live block. Safe to call from any thread.
+
+        Queued rather than applied here for the reason ``ParamChange`` gives.
+        """
+        self._commands.append(("param", ParamChange(effect, name, value)))
+
+    def drain_retired(self) -> list[EffectChain]:
+        """Take the chains the callback has swapped out. For the UI thread only.
+
+        Releasing a chain can mean tearing down an ONNX session or a VST3 plugin,
+        neither of which may happen on the callback thread; the callback parks
+        them here and whoever calls this holds the last reference.
+        """
+        retired = self._retired
+        return [retired.popleft() for _ in range(len(retired))]
+
     def voice_states(self) -> list[tuple[int, float]]:
         """(voice_id, progress) snapshot; safe to call from the UI thread."""
         return self._mixer.voice_states()
@@ -151,19 +182,59 @@ class AudioEngine:
     def last_peak(self) -> float:
         return self._mixer.last_peak
 
+    @property
+    def input_peak(self) -> float:
+        """Microphone level before the chain; drives the rack's MIC card."""
+        return self._input_peak
+
+    @property
+    def chain_peak(self) -> float:
+        """Microphone level after the chain; drives the rack's OUT card."""
+        return self._chain_peak
+
+    @property
+    def chain_latency_ms(self) -> float:
+        """Latency of the chain currently running on the callback thread."""
+        return self._chain.latency_frames * 1000.0 / self._config.samplerate
+
+    @property
+    def chain_cost_ms(self) -> float:
+        """Declared processing cost of the enabled blocks in the active chain.
+
+        Cost telemetry is optional because the pedalboard blocks are effectively
+        free at this cadence; the neural block reports its measured p99 instead.
+        Reading it here keeps timing and allocation out of the callback itself.
+        """
+        return sum(
+            float(getattr(slot.effect, "cost_ms", 0.0))
+            for slot in self._chain.slots
+            if slot.enabled
+        )
+
     def _on_input(self, block: np.ndarray) -> None:
         self._ring.write(block)
 
     def _on_output(self, out: np.ndarray) -> None:
         commands = self._commands
         while commands:
-            name, voice = commands.popleft()
-            if name == "play" and voice is not None:
-                self._mixer.add_voice(voice)
+            name, payload = commands.popleft()
+            if name == "play" and isinstance(payload, Voice):
+                self._mixer.add_voice(payload)
             elif name == "stop_all":
                 self._mixer.stop_all()
+            elif name == "chain" and isinstance(payload, EffectChain):
+                self._retired.append(self._chain)
+                self._chain = payload
+            elif name == "param" and isinstance(payload, ParamChange):
+                payload.effect.set_param(payload.name, payload.value)
 
         self._ratio = self._controller.update(self._ring.fill)
         self._resampler.read(self._mic_block, self._ratio)
-        self._mixer.process(self._mic_block, self._mix_block)
+        # max/-min instead of max(abs(...)), for the reason Mixer gives: it is the
+        # same absolute peak without the temporary array np.abs allocates.
+        mic = self._mic_block
+        self._input_peak = float(max(mic.max(), -mic.min()))
+        self._chain.process(mic)
+        self._chain_peak = float(max(mic.max(), -mic.min()))
+        self._mixer.process(mic, self._mix_block)
         out[:] = self._mix_block[:, None]

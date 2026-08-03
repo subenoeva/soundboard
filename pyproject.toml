@@ -17,6 +17,14 @@ dependencies = [
     "pynput>=1.8.1",
     "httpx>=0.28.1",
     "cryptography>=45.0",
+    # Pinned, not a floor: 0.9.24's Linux wheel is built with AVX-512 and dies with
+    # SIGILL on import on any CPU without it -- every AMD EPYC runner on GitHub, and
+    # a large share of the machines a release would land on. 0.9.20 is broken the
+    # same way while 0.9.21 to 0.9.23 are not, so this is per-release build damage
+    # rather than a regression to wait out. Before raising it, check the new version
+    # imports on a CPU with no avx512f flag.
+    "pedalboard==0.9.23",
+    "onnxruntime>=1.28",
 ]
 
 [project.scripts]

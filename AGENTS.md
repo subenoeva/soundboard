@@ -45,6 +45,27 @@ Layered, with the real-time audio core kept isolated from anything that does I/O
   never do I/O, logging, `queue.Queue`, or non-trivial allocation — numpy vector ops only.
   Internal format is fixed: 48kHz mono float32. Tested without hardware via the
   `AudioBackend` protocol + `FakeBackend` (simulated clock, deterministic).
+- **`effects/`** — the microphone effects chain, at the same layer as `audio/` and running
+  on the same callback thread, so every rule above applies to it too. `chain.py` (the
+  `Effect` protocol and `EffectChain`: ordered slots, in-place `process()`, per-block
+  bypass, latency as the sum of the enabled blocks), `params.py` (`ParamSpec` — the
+  parameter panel is generated from descriptors, never written per effect, which is what
+  lets an arbitrary VST3 appear with working sliders), `pedal.py` (one pedalboard plugin
+  behind the protocol) and `registry.py` (the built-in blocks, with defaults chosen for a
+  voice rather than pedalboard's own). The engine swaps chains through the same command
+  deque `play`/`stop_all` use and hands the outgoing one back through `drain_retired()`:
+  releasing a plugin or an ONNX session on the callback thread is not allowed. Persistence
+  is `ui/effects_store.py`, beside `ui_layout.json`; an entry that will not build is kept
+  as a row carrying its error, never dropped. `vst_editor.py` is the plugin's own window:
+  `show_editor()` blocks the thread it is called on and pedalboard only allows the main
+  one, so it runs in a second process (`soundboard vst-editor <path>`, driven by
+  `ui/vst_editor_process.py` over a QProcess) holding a second instance of the plugin.
+  Parameters travel one way, as JSON lines on stdout, and land in the chain through the
+  same funnel a slider uses; the parent closing stdin is what asks the window to go, and
+  is the only cue that reaches a process sitting inside a plugin's message loop.
+  `plugin.parameters` rebuilds its whole dictionary on every access (3.7 ms for a
+  67-parameter plugin), so it is read once per poll rather than once per parameter, and
+  `raw_state` — 0.01 ms — decides whether there is anything worth reading at all.
 - **`remote/`** — the Supabase-backed shared sound library. `RemoteClient` is the seam
   between library logic and the backend (`SupabaseRemoteClient` real,
   `FakeRemoteClient` in-memory for tests — the same role `AudioBackend` plays for audio).
@@ -98,18 +119,55 @@ Layered, with the real-time audio core kept isolated from anything that does I/O
   disables the feature for a checkout or a pip install; under an AppImage it returns
   `$APPIMAGE`, never `sys.executable` (that points inside the FUSE mount).
   `packaging/sign_release.py` is the producer side and is tested against this parser.
+- **`packaging/`** — the build tooling both PyInstaller specs call before `Analysis`.
+  `fetch_model.py` downloads the neural block's ONNX weights from a pinned Hugging Face
+  revision and verifies the SHA-256 through `updater/download.py`, so the 10 MB file is
+  not committed but the binary still ships it and works offline (`dpdfnet`'s own
+  downloader checks nothing and defaults to the mutable `main` ref, which is why it is
+  not used). `third_party_notices.py` generates `THIRD-PARTY-NOTICES` from the metadata
+  of what is installed and ships it with the GPL-3.0, LGPL-3.0 and Apache-2.0 texts, the
+  last two being what Apache-2.0 §4 and LGPL-3 §4(b) require the distribution to carry
+  for CEVA's model and for Qt. Its header is also where the Windows `--onefile` build
+  answers LGPL-3 §4 for Qt: the DLLs cannot be swapped inside a single executable, so
+  the binary relies on §4(d)(0) — the whole program is GPL-3.0-or-later and its source
+  and build are public, which is what makes relinking a modified Qt possible.
+  Run either by hand from a checkout: `uv run python packaging/fetch_model.py`.
+- **`pedalboard` is pinned to an exact version, and the pin is load-bearing.** Its Linux
+  wheels are not all built the same way: 0.9.24 and 0.9.20 contain AVX-512 with no CPU
+  dispatch and die with SIGILL on `import`, before any audio runs, on every CPU without
+  it — seven of eight GitHub runners, and a large share of the machines a release lands
+  on. 0.9.21 through 0.9.23 are clean. This is per-release build damage rather than a
+  regression, so a newer version is not automatically safer: before raising the pin,
+  import it on a CPU whose `/proc/cpuinfo` has no `avx512f` flag.
 - **`hotkeys.py`** (top-level, not under `ui/`) — global keyboard shortcuts behind a
   `HotkeyManager` protocol: `PynputHotkeyManager` (real) / `FakeHotkeyManager` (tests, no OS
   hook). Only module that imports `pynput`.
-- **`cli.py`** — subcommands (`devices`, `run`, `auth`, `sounds`, `categories`, `gui`).
+- **`cli.py`** — subcommands (`devices`, `run`, `auth`, `sounds`, `categories`, `gui`, plus
+  the hidden `vst-editor`, which is how the GUI reaches a plugin window: a frozen build
+  has no interpreter beside it, so it runs itself again).
   Imports `soundboard.ui.app` lazily, only inside the `gui` branch, so headless CLI usage
   never pulls in PySide6.
 
-Dependency direction: nothing under `audio/` may import `ui/`, `hotkeys.py`, `remote/`,
-PySide6, or `pynput`. `ui/` and `hotkeys.py` may import `audio/`, `remote/`, `library/`,
-`updater/`. `updater/` imports none of the others (it duplicates the `settings.json` path
-helper rather than reach into `remote/`). `ui/` is the only importer of PySide6;
-`hotkeys.py` is the only importer of `pynput`.
+Dependency direction: nothing under `audio/` or `effects/` may import `ui/`, `hotkeys.py`,
+`remote/`, PySide6, or `pynput`. `ui/` and `hotkeys.py` may import `audio/`, `effects/`,
+`remote/`, `library/`, `updater/`. `updater/` imports none of the others (it duplicates the
+`settings.json` path helper rather than reach into `remote/`). `ui/` is the only importer
+of PySide6; `hotkeys.py` is the only importer of `pynput`.
+
+The GIL is a shared resource with a deadline on it. The chain runs inline in the audio
+callback, and an ONNX inference releases the GIL for the compute and then has to take it
+back before the block is due; if another thread is runnable at that moment the callback
+waits for it, and on Windows that wait resolves no finer than ~15.6 ms against a 5.33 ms
+budget. **So no background work in this process may occupy the GIL for long.** There are
+two ways to break that and "it calls into C" only rules out one: a pure-Python loop
+occupies it by running bytecode, and a long C call that never releases it (`json.loads`
+over a multi-MB document is the standard example) occupies it just as effectively. What is
+safe is C that releases the GIL and then blocks — `sf.read`, `soxr`, `hashlib`, socket
+I/O, which is what every `QRunnable` here happens to do already. Anything else belongs in
+a subprocess, which brings its own GIL. Measured, with the real model on the real cadence:
+the app's own import path (`sf.read` + `soxr.resample`) is indistinguishable from an idle
+machine, while a CPU-bound Python thread puts 139 of 258 blocks over budget. No knob fixes
+it — the Windows timer-resolution mitigations were measured and rejected.
 
 ## Project conventions
 

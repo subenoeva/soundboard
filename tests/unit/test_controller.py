@@ -15,11 +15,15 @@ from pathlib import Path
 import pytest
 
 from soundboard.audio.fake_backend import FakeBackend
+from soundboard.effects.chain import Effect, EffectChain
+from soundboard.effects.params import ParamValue
 from soundboard.hotkeys import FakeHotkeyManager
 from soundboard.library.cache import SoundCache
 from soundboard.remote.fake_client import FakeRemoteClient
 from soundboard.remote.models import Session
 from soundboard.ui.controller import AppController
+from soundboard.ui.effects_model import EffectsModel
+from soundboard.ui.effects_store import EffectEntry, save_effects
 from soundboard.ui.grid_model import GridModel
 from soundboard.ui.layout_store import Cell, GridLayout, LocalSource, load_layout, save_layout
 
@@ -43,6 +47,11 @@ class FakeEngine:
         self.stopped = False
         self.stop_all_called = False
         self.last_peak = 0.0
+        self.input_peak = 0.0
+        self.chain_peak = 0.0
+        self.chain_latency_ms = 0.0
+        self.chain_cost_ms = 0.0
+        self.chains: list[EffectChain] = []
 
     def play(self, pcm, **kwargs):  # type: ignore[no-untyped-def]
         return 1
@@ -53,7 +62,16 @@ class FakeEngine:
     def stop(self) -> None:
         self.stopped = True
 
+    def set_chain(self, chain: EffectChain) -> None:
+        self.chains.append(chain)
+
+    def set_param(self, effect: Effect, name: str, value: ParamValue) -> None:
+        effect.set_param(name, value)
+
     def voice_states(self) -> list[tuple[int, float]]:
+        return []
+
+    def drain_retired(self) -> list[EffectChain]:
         return []
 
     @property
@@ -76,6 +94,7 @@ def make_controller(
         client=client, store=store, backend=FakeBackend(),
         hotkeys=hotkeys or FakeHotkeyManager(), cache=SoundCache(tmp_path / "cache"),
         layout_path=tmp_path / "layout.json",
+        effects_path=tmp_path / "effects.json",
         engine_factory=engine_factory or (lambda layout: FakeEngine()),
     )
     return controller, client, store
@@ -114,6 +133,38 @@ def test_apply_devices_starts_engine_and_lands_on_board(tmp_path: Path, qtbot: o
     assert controller.gridModel is not None
     assert controller.bridge is not None
     assert (tmp_path / "layout.json").exists()
+
+
+def test_saved_effects_are_loaded_and_exposed_on_the_board(
+    tmp_path: Path, qtbot: object
+) -> None:
+    save_effects(tmp_path / "effects.json", [EffectEntry(kind="highpass")])
+    controller, client, _ = make_controller(tmp_path)
+    client.sign_up("user@example.com", "password")
+    controller.bootstrap()
+    controller.log_in("user@example.com", "password")
+    controller.apply_devices("mic", "out", 2, 3)
+
+    effects = controller.effectsModel
+
+    assert isinstance(effects, EffectsModel)
+    assert effects.data(effects.index(0), EffectsModel.KIND_ROLE) == "highpass"
+
+
+def test_effects_model_toasts_reach_the_window(tmp_path: Path, qtbot: object) -> None:
+    controller, client, _ = make_controller(tmp_path)
+    client.sign_up("user@example.com", "password")
+    controller.bootstrap()
+    controller.log_in("user@example.com", "password")
+    controller.apply_devices("mic", "out", 2, 3)
+    messages: list[str] = []
+    controller.toast.connect(messages.append)
+    effects = controller.effectsModel
+    assert isinstance(effects, EffectsModel)
+
+    effects.add("flanger")
+
+    assert messages and "flanger" in messages[0]
 
 
 def test_engine_failure_shows_setup_error(tmp_path: Path, qtbot: object) -> None:
@@ -260,6 +311,7 @@ def test_log_out_retires_the_engine_stack_and_returns_to_login(
     assert controller.userEmail == ""  # type: ignore[comparison-overlap]
     assert store.load() is None
     assert controller.gridModel is None
+    assert controller.effectsModel is None
     assert controller.bridge is None
     assert engines[-1].stopped
     # A global hotkey surviving the session would play into a dead engine, from a

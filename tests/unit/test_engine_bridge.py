@@ -2,17 +2,30 @@
 
 from __future__ import annotations
 
+from pytest import MonkeyPatch
+
 from soundboard.audio.engine import EngineMetrics
+from soundboard.effects.chain import EffectChain
 from soundboard.ui.engine_bridge import EngineBridge
 
 
 class FakeEngine:
     def __init__(self) -> None:
         self.last_peak = 0.0
+        self.input_peak = 0.0
+        self.chain_peak = 0.0
+        self.chain_latency_ms = 0.0
+        self.chain_cost_ms = 0.0
         self.states: list[tuple[int, float]] = []
+        self.retired: list[EffectChain] = []
 
     def voice_states(self) -> list[tuple[int, float]]:
         return self.states
+
+    def drain_retired(self) -> list[EffectChain]:
+        retired = self.retired[:]
+        self.retired.clear()
+        return retired
 
     @property
     def metrics(self) -> EngineMetrics:
@@ -44,3 +57,59 @@ def test_peak_changed_only_fires_on_change(qtbot: object) -> None:
     engine.last_peak = 0.3
     bridge.poll()
     assert len(fired) == 1
+
+
+def test_poll_drains_retired_chains(qtbot: object) -> None:
+    engine = FakeEngine()
+    bridge = EngineBridge(engine)
+    engine.retired.append(EffectChain())
+
+    bridge.poll()
+
+    assert engine.retired == []
+
+
+def test_poll_publishes_the_effects_rack_metrics(qtbot: object) -> None:
+    engine = FakeEngine()
+    bridge = EngineBridge(engine)
+    engine.input_peak = 0.2
+    engine.chain_peak = 0.1
+    engine.chain_latency_ms = 20.0
+    engine.chain_cost_ms = 1.25
+
+    bridge.poll()
+
+    assert bridge.inputPeak == 0.2  # type: ignore[comparison-overlap]
+    assert bridge.chainPeak == 0.1  # type: ignore[comparison-overlap]
+    assert bridge.chainLatencyMs == 20.0  # type: ignore[comparison-overlap]
+    assert bridge.chainCostMs == 1.25  # type: ignore[comparison-overlap]
+
+
+def test_poll_collects_callback_allocations_on_the_qt_thread(
+    qtbot: object, monkeypatch: MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "soundboard.ui.engine_bridge.collect_realtime_garbage",
+        lambda: calls.append("collect"),
+    )
+    bridge = EngineBridge(FakeEngine())
+
+    bridge.poll()
+
+    assert calls == ["collect"]
+
+
+def test_stopping_the_bridge_restores_automatic_gc(
+    qtbot: object, monkeypatch: MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "soundboard.ui.engine_bridge.restore_realtime_garbage",
+        lambda: calls.append("restore"),
+    )
+    bridge = EngineBridge(FakeEngine())
+
+    bridge.stop()
+
+    assert calls == ["restore"]
