@@ -89,7 +89,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64 libatspi2.0-0t64 \
+            libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64 libatomic1 libatspi2.0-0t64 \
             libblkid1 libbrotli1 libbsd0 libbz2-1.0 libcairo-gobject2 libcairo2 \
             libcap2 libcom-err2 libdatrie1 libdb5.3t64 libdbus-1-3 libegl1 libepoxy0 \
             libexpat1 libffi8 libfontconfig1 libfreetype6 libfribidi0 libgbm1 \
