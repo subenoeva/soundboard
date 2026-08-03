@@ -132,6 +132,13 @@ Layered, with the real-time audio core kept isolated from anything that does I/O
   the binary relies on §4(d)(0) — the whole program is GPL-3.0-or-later and its source
   and build are public, which is what makes relinking a modified Qt possible.
   Run either by hand from a checkout: `uv run python packaging/fetch_model.py`.
+- **`pedalboard` is pinned to an exact version, and the pin is load-bearing.** Its Linux
+  wheels are not all built the same way: 0.9.24 and 0.9.20 contain AVX-512 with no CPU
+  dispatch and die with SIGILL on `import`, before any audio runs, on every CPU without
+  it — seven of eight GitHub runners, and a large share of the machines a release lands
+  on. 0.9.21 through 0.9.23 are clean. This is per-release build damage rather than a
+  regression, so a newer version is not automatically safer: before raising the pin,
+  import it on a CPU whose `/proc/cpuinfo` has no `avx512f` flag.
 - **`hotkeys.py`** (top-level, not under `ui/`) — global keyboard shortcuts behind a
   `HotkeyManager` protocol: `PynputHotkeyManager` (real) / `FakeHotkeyManager` (tests, no OS
   hook). Only module that imports `pynput`.
