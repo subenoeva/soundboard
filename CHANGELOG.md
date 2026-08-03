@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/subenoeva/soundboard/compare/v0.4.7...v0.5.0) (2026-08-03)
+
+
+### Features
+
+* **effects:** add the microphone effects chain ([#34](https://github.com/subenoeva/soundboard/issues/34)) ([37ae6ce](https://github.com/subenoeva/soundboard/commit/37ae6ce6513eeaa46e4f5484d51ac1039cf29f04))
+
 ## [0.4.7](https://github.com/subenoeva/soundboard/compare/v0.4.6...v0.4.7) (2026-08-02)
 
 
