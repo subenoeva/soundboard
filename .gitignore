@@ -18,6 +18,11 @@ htmlcov/
 *.spec.bak
 *.AppImage
 src/soundboard/_baked_defaults.py
+# Fetched and hash-verified at build time by packaging/fetch_model.py, which is what
+# makes committing 10MB of weights unnecessary. Named by extension so anything else
+# that belongs in models/ stays visible.
+src/soundboard/effects/models/*.onnx
+src/soundboard/effects/models/*.onnx.part
 
 # Local audio scratch
 scratch/

@@ -110,6 +110,15 @@ Layered, with the real-time audio core kept isolated from anything that does I/O
   disables the feature for a checkout or a pip install; under an AppImage it returns
   `$APPIMAGE`, never `sys.executable` (that points inside the FUSE mount).
   `packaging/sign_release.py` is the producer side and is tested against this parser.
+- **`packaging/`** — the build tooling both PyInstaller specs call before `Analysis`.
+  `fetch_model.py` downloads the neural block's ONNX weights from a pinned Hugging Face
+  revision and verifies the SHA-256 through `updater/download.py`, so the 10 MB file is
+  not committed but the binary still ships it and works offline (`dpdfnet`'s own
+  downloader checks nothing and defaults to the mutable `main` ref, which is why it is
+  not used). `third_party_notices.py` generates `THIRD-PARTY-NOTICES` from the metadata
+  of what is installed and ships it with the full Apache-2.0 text, which Apache-2.0 §4
+  requires the distribution to carry for CEVA's model and the loop vendored from it.
+  Run either by hand from a checkout: `uv run python packaging/fetch_model.py`.
 - **`hotkeys.py`** (top-level, not under `ui/`) — global keyboard shortcuts behind a
   `HotkeyManager` protocol: `PynputHotkeyManager` (real) / `FakeHotkeyManager` (tests, no OS
   hook). Only module that imports `pynput`.
